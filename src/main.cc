@@ -2,9 +2,6 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
-#include "SDL3/SDL_events.h"
-#include "SDL3/SDL_keyboard.h"
-#include "SDL3/SDL_keycode.h"
 #include "editor.hpp"
 #include <util.hpp>
 #include <logging.hpp>
@@ -18,7 +15,7 @@ void keyDown(SDL_KeyboardEvent key) {
     ;
     if (
         SDLK_TAB <= key.key && key.key <= SDLK_TILDE
-        && key.key <= SDLK_AT && SDLK_LEFTBRACKET <= key.key
+        && (key.key <= SDLK_AT || SDLK_LEFTBRACKET <= key.key)
     ) {
         char c = static_cast<char>(key.key);
         if (SDLK_A <= key.key && key.key <= SDLK_Z) {
@@ -115,7 +112,7 @@ int main(int argc, char* args[]) {
     SDL_CHK(TTF_Init());
 
     for (int logLevel = SDL_LOG_CATEGORY_CUSTOM; logLevel < CUSTOM_LOG_CATEGORY_LAST; logLevel++) {
-        SDL_SetLogPriority(logLevel, static_cast<SDL_LogPriority>(0));
+        SDL_SetLogPriority(logLevel, SDL_LOG_PRIORITY_TRACE);
     }
     SDL_SetLogPriority(CUSTOM_LOG_CATEGORY_EXPLORER, SDL_LOG_PRIORITY_INFO);
 
@@ -138,6 +135,7 @@ int main(int argc, char* args[]) {
         update();
         render(renderer, state, defaultFont);
     }
+    state.text.close();
     TTF_CloseFont(FreeMono38);
     FreeMono38 = NULL;
     TTF_Quit();

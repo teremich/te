@@ -1,10 +1,11 @@
 #include "editor.hpp"
+#include "logging.hpp"
 #include "util.hpp"
+#include <cstdio>
 
 void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const {
     SDL_Texture* texture = NULL;
-    SDL_FPoint pos = {50, 50};
-    SDL_FRect dest = dimensions + pos;
+    SDL_FRect dest = dimensions;
     SDL_CHK(text(
         renderer,
         content,
@@ -48,9 +49,9 @@ void TextSection::open(const char* file) {
         fileHandle = fopen(file, "w+");
     } else {
         fileHandle = tmpfile();
-        freopen(NULL, "w+", fileHandle);
     }
     assert(fileHandle);
+    SDL_LogDebug(CUSTOM_LOG_CATEGORY_TEXT, "fileHandle: %p\n", fileHandle);
     fseek(fileHandle, 0, SEEK_END);
     fileSize = ftell(fileHandle);
     rewind(fileHandle);
@@ -59,11 +60,11 @@ void TextSection::open(const char* file) {
         exit(-ENOMEM);
     }
     bufferSize = 1024;
+    assert(cursor == 0);
     fread(content+cursor+bufferSize, fileSize, 1, fileHandle);
 }
 
 void TextSection::write(char c) {
-    assert(fileHandle);
     if (!bufferSize) {
         grow();
     }
@@ -120,7 +121,15 @@ void TextSection::del(movement to) {
     }
 }
 
-void TextSection::save() {
+void TextSection::close() {
+    if (!fileHandle) {
+        return;
+    }
+    fclose(fileHandle);
+    fileHandle = NULL;
+}
+
+void TextSection::save() const {
     assert(fileHandle);
     flush();
     fflush(fileHandle);
@@ -227,6 +236,7 @@ TextSection::~TextSection() {
     if (fileHandle) {
         flush();
         fclose(fileHandle);
+        fileHandle = NULL;
     }
     if (content) {
         free(content);
@@ -246,9 +256,9 @@ void TextSection::grow(size_t newSize) {
     bufferSize = newSize;
 }
 
-void TextSection::flush() {
+void TextSection::flush() const {
+    assert(fileHandle);
     rewind(fileHandle);
     fwrite(content, cursor, 1, fileHandle);
     fwrite(content+cursor+bufferSize, fileSize-cursor, 1, fileHandle);
-    grow();
 }

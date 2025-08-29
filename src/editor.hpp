@@ -75,16 +75,27 @@ class TextSection : public Section{
     void del(movement to);
     // TODO
     // void delSelection();
-    void save();
+    void close();
+    void save() const;
     void saveas(const char* newFile);
     void moveRel(movement to);
     void moveAbs(size_t to);
     ~TextSection();
     TextSection();
+    TextSection& operator=(TextSection&& moveFrom) {
+        std::memcpy(
+            reinterpret_cast<void*>(this),
+            reinterpret_cast<void*>(&moveFrom),
+            sizeof(*this)
+        );
+        moveFrom.content = nullptr;
+        moveFrom.fileHandle = NULL;
+        return *this;
+    }
     private:
     FILE* fileHandle = NULL;
     size_t cursor = 0;
-    size_t visStart = 0;
+    SDL_FPoint visStart = {0, 0};
     size_t fileSize = 0;
     size_t bufferSize = 0;
     [[maybe_unused]] ssize_t selectionStart = -1;
@@ -93,7 +104,7 @@ class TextSection : public Section{
     // [ beginning of file to cursor ] [ bufferSize ] [ end of file ]
     char* content = nullptr;
     void grow(size_t newSize = 1024);
-    void flush();
+    void flush() const;
     void drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const;
     void drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const;
 };
