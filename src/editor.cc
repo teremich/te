@@ -1,5 +1,4 @@
 #include "editor.hpp"
-#include "SDL3/SDL_render.h"
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <logging.hpp>
@@ -29,3 +28,5 @@ bool text(
     *out = texture;
     return true;
 }
+
+

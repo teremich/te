@@ -2,9 +2,70 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
+#include "SDL3/SDL_events.h"
+#include "SDL3/SDL_keyboard.h"
+#include "SDL3/SDL_keycode.h"
 #include "editor.hpp"
 #include <util.hpp>
 #include <logging.hpp>
+
+static EditorState state;
+
+void keyDown(SDL_KeyboardEvent key) {
+    bool isCaps =
+        (bool)(SDL_GetModState() & (SDL_KMOD_LSHIFT | SDL_KMOD_RSHIFT))
+        ^ (bool)(SDL_GetModState() & SDL_KMOD_CAPS)
+    ;
+    if (
+        SDLK_TAB <= key.key && key.key <= SDLK_TILDE
+        && key.key <= SDLK_AT && SDLK_LEFTBRACKET <= key.key
+    ) {
+        char c = static_cast<char>(key.key);
+        if (SDLK_A <= key.key && key.key <= SDLK_Z) {
+            c += isCaps*('A'-'a');
+        }
+        state.text.write(c);
+        return;
+    }
+    TextSection::movement mvmnt =
+        TextSection::MOVEMENT_wordWise * (bool)(SDL_GetModState() & (SDL_KMOD_CTRL)) +
+        TextSection::MOVEMENT_select * (bool)(SDL_GetModState() & (SDL_KMOD_LSHIFT | SDL_KMOD_RSHIFT));
+    switch(key.key) {
+        case SDLK_BACKSPACE:
+            state.text.del(mvmnt);
+            return;
+        case SDLK_DELETE:
+            mvmnt += TextSection::MOVEMENT_forward;
+            state.text.del(mvmnt);
+            return;
+        case SDLK_DOWN:
+            mvmnt += TextSection::MOVEMENT_forward;
+            [[fallthrough]];
+        case SDLK_UP:
+            mvmnt += TextSection::MOVEMENT_lineWise;
+            state.text.moveRel(mvmnt);
+            return;
+        case SDLK_RIGHT:
+            mvmnt += TextSection::MOVEMENT_forward;
+            [[fallthrough]];
+        case SDLK_LEFT:
+            state.text.moveRel(mvmnt);
+            return;
+        case SDLK_END:
+            mvmnt += TextSection::MOVEMENT_forward;
+            [[fallthrough]];
+        case SDLK_HOME:
+            mvmnt += TextSection::MOVEMENT_full;
+            state.text.moveRel(mvmnt);
+            return;
+        case SDLK_RETURN:
+            state.text.write('\n');
+            return;
+        default:
+            break;
+    }
+
+}
 
 bool handleEvents() {
     SDL_Event event;
@@ -15,7 +76,9 @@ bool handleEvents() {
             // case SDL_EVENT_MOUSE_MOTION:
             // case SDL_EVENT_MOUSE_BUTTON_DOWN:
             // case SDL_EVENT_MOUSE_BUTTON_UP:
-            // case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_DOWN:
+                keyDown(event.key);
+                break;
             // case SDL_EVENT_KEY_UP:
             // case SDL_EVENT_WINDOW_RESIZED:
             // case SDL_EVENT_WINDOW_RESTORED:
@@ -70,7 +133,7 @@ int main(int argc, char* args[]) {
     if (argc > 1) {
         path = args[1];
     }
-    EditorState state{path};
+    state = EditorState{path};
     while (handleEvents()) {
         update();
         render(renderer, state, defaultFont);

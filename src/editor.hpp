@@ -4,11 +4,11 @@
 #include <filesystem>
 #include <cassert>
 #include <cstring>
-#include <algorithm>
 #include <libgen.h>
 #include <vector>
 #include <SDL3/SDL.h>
 #include <util.hpp>
+#include <logging.hpp>
 
 struct Section{
     static const enum class Type{
@@ -62,149 +62,25 @@ class TextSection : public Section{
     static const Section::Type type = Section::Type::TEXTFILE;
     void draw(struct SDL_Renderer* renderer, SDL_FRect dimensions, struct TTF_Font* font) const override;
     // NULL opens a tmpfile
-    void open(const char* file) {
-        if (file) {
-            fileHandle = fopen(file, "w+");
-        } else {
-            fileHandle = tmpfile();
-            freopen(NULL, "w+", fileHandle);
-        }
-        assert(fileHandle);
-        fseek(fileHandle, 0, SEEK_END);
-        fileSize = ftell(fileHandle);
-        rewind(fileHandle);
-        content = static_cast<char*>(malloc(fileSize+1024));
-        if (!content) {
-            exit(-ENOMEM);
-        }
-        bufferSize = 1024;
-        fread(content+cursor+bufferSize, fileSize, 1, fileHandle);
-    }
-    void write(char c) {
-        assert(fileHandle);
-        if (!bufferSize) {
-            grow();
-        }
-        content[cursor] = c;
-        bufferSize--;
-        fileSize++;
-        cursor++;
-    }
-    void save() {
-        assert(fileHandle);
-        flush();
-        fflush(fileHandle);
-    }
-    void saveas(const char* newFile) {
-        if (fileHandle) {
-            fclose(fileHandle);
-        }
-        fileHandle = fopen(newFile, "w+");
-        save();
-    }
-    struct movement{
-        bool forward  : 1;
-        bool wordWise : 1;
-        bool lineWise : 1;
-        bool full     : 1;
-        bool select   : 1;
-        operator uint8_t() {
-            return *std::bit_cast<uint8_t*>(this);
-        }
+    void open(const char* file);
+    void write(char c);
+    enum{
+        MOVEMENT_forward  = 1<<(0), // 0x01
+        MOVEMENT_wordWise = 1<<(1), // 0x02
+        MOVEMENT_lineWise = 1<<(2), // 0x04
+        MOVEMENT_full     = 1<<(3), // 0x08
+        MOVEMENT_select   = 1<<(4), // 0x10
     };
-    void moveRel(movement to) {
-        switch(to) {
-            case 0b0000: // LEFT -> one char back
-            if (cursor == 0) {
-                    return;
-                }
-                cursor--;
-                content[cursor+bufferSize] = content[cursor];
-                break;
-                case 0b1000: // RIGHT -> one char forward
-                if (cursor == fileSize) {
-                    return;
-                }
-                content[cursor] = content[cursor+bufferSize];
-                cursor++;
-                break;
-            case 0b0100: // CTRL+LEFT -> one word back
-            while (cursor && !isWordBreak(content[cursor-1], content[cursor])) {
-                    cursor--;
-                    content[cursor+bufferSize] = content[cursor];
-                }
-                break;
-                case 0b1100: // CTRL+RIGHT -> one word forward
-                while (cursor < fileSize && !isWordBreak(content[cursor+1], content[cursor])) {
-                    content[cursor] = content[cursor+bufferSize];
-                    cursor++;
-                }
-                break;
-                case 0b0010: // UP -> one line back
-                {
-                    int32_t col = 0;
-                    int32_t lineSize = -1;
-                    bool end = false;
-                    bool foundUpperLine = false;
-                    while (cursor && !end) {
-                        cursor--;
-                        content[cursor+bufferSize] = content[cursor];
-                        if (content[cursor] == '\n') {
-                            end = foundUpperLine;
-                            foundUpperLine = true;
-                        }
-                        if (foundUpperLine) {
-                            lineSize++;
-                        } else {
-                            col++;
-                        }
-                    }
-                    if (lineSize < 0) {
-                        return;
-                    }
-                    if (!end) {
-                        assert(cursor == 0);
-                        int32_t finalCol = std::min(col, lineSize);
-                        assert(finalCol >= 0);
-                        moveAbs(finalCol+cursor);
-                    }
-                }
-                break;
-            case 0b1010: // DOWN -> one line forward
-            break;
-            case 0b0001: // HOME -> beginning of line
-            break;
-            case 0b1001: // END -> end of line
-            break;
-            case 0b0101: // CTRL+HOME -> beginning of file
-            break;
-            case 0b1101: // CTRL+END -> end of file
-            break;
-            default:
-            return;
-        }
-    }
-    void moveAbs(size_t to) {
-        if (to > cursor) {
-            // cursor moves right
-            std::memmove(content+cursor, content+cursor+bufferSize, to-cursor);
-        } else if (to < cursor) {
-            // cursor moves left
-            std::memmove(content+to+bufferSize, content+to, cursor-to);
-        }
-        cursor = to;
-    }
-    ~TextSection() {
-        if (fileHandle) {
-            flush();
-            fclose(fileHandle);
-        }
-        if (content) {
-            free(content);
-            content = nullptr;
-        }
-    }
-    TextSection() {}
+    typedef uint8_t movement;
+    void del(movement to);
+    // TODO
+    // void delSelection();
+    void save();
+    void saveas(const char* newFile);
+    void moveRel(movement to);
+    void moveAbs(size_t to);
+    ~TextSection();
+    TextSection();
     private:
     FILE* fileHandle = NULL;
     size_t cursor = 0;
@@ -212,26 +88,14 @@ class TextSection : public Section{
     size_t fileSize = 0;
     size_t bufferSize = 0;
     [[maybe_unused]] ssize_t selectionStart = -1;
-    char* content = nullptr;
-    void grow(size_t newSize = 1024) {
-        const auto oldContent = content;
-        content = static_cast<char*>(realloc(content, fileSize+newSize));
-        if (!content) {
-            content = oldContent;
-            exit(-ENOMEM);
-        }
-        bufferSize = newSize;
-    }
-    void flush() {
-        rewind(fileHandle);
-        fwrite(content, cursor, 1, fileHandle);
-        fwrite(content+cursor+bufferSize, fileSize-cursor, 1, fileHandle);
-        grow();
-    }
     // content layout
-    // 
     // 0                            cursor  cursor+bufferSize bufferSize+fileSize
     // [ beginning of file to cursor ] [ bufferSize ] [ end of file ]
+    char* content = nullptr;
+    void grow(size_t newSize = 1024);
+    void flush();
+    void drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const;
+    void drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const;
 };
 
 class ExplorerSection : public Section{
@@ -249,6 +113,7 @@ class ExplorerSection : public Section{
 struct EditorState{
     TextSection text;
     ExplorerSection explorer;
+    EditorState() = default;
     explicit EditorState(const char* filepath) {
         if (!filepath) {
             return;
