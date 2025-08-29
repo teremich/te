@@ -6,6 +6,9 @@
 #include <cstring>
 #include <algorithm>
 #include <libgen.h>
+#include <vector>
+#include <SDL3/SDL.h>
+#include <util.hpp>
 
 struct Section{
     static const enum class Type{
@@ -16,7 +19,8 @@ struct Section{
     } type = Section::Type::UNDEFINED;
     Section() = default;
     ~Section() = default;
-    virtual void draw(struct SDL_Renderer* renderer) const = 0;
+    // dimensions -> {xy=offset, wh=available space}
+    virtual void draw(struct SDL_Renderer* renderer, SDL_FRect dimensions, struct TTF_Font* font) const = 0;
 };
 
 static inline bool isWordBreak(char to, char from) {
@@ -56,7 +60,7 @@ static inline bool isWordBreak(char to, char from) {
 class TextSection : public Section{
     public:
     static const Section::Type type = Section::Type::TEXTFILE;
-    void draw(struct SDL_Renderer* renderer) const override;
+    void draw(struct SDL_Renderer* renderer, SDL_FRect dimensions, struct TTF_Font* font) const override;
     // NULL opens a tmpfile
     void open(const char* file) {
         if (file) {
@@ -200,6 +204,7 @@ class TextSection : public Section{
             content = nullptr;
         }
     }
+    TextSection() {}
     private:
     FILE* fileHandle = NULL;
     size_t cursor = 0;
@@ -234,11 +239,11 @@ class ExplorerSection : public Section{
     static const Section::Type type = Section::Type::EXPLORER;
     ExplorerSection() = default;
     ~ExplorerSection() = default;
-    explicit ExplorerSection(const char* path) : 
-    mPath(path) {}
-    void draw(struct SDL_Renderer* renderer) const override;
+    explicit ExplorerSection(const char* path);
+    void draw(struct SDL_Renderer* renderer, SDL_FRect dimensions, struct TTF_Font* font) const override;
     private:
-    std::filesystem::path mPath;
+    std::filesystem::path basePath;
+    std::vector<std::filesystem::directory_entry> entries;
 };
 
 struct EditorState{
@@ -260,9 +265,34 @@ struct EditorState{
         }
         text.open(nullptr);
     }
-    void draw(struct SDL_Renderer* renderer) {
-        text.draw(renderer);
-        explorer.draw(renderer);
+    void draw(SDL_Renderer* renderer, struct TTF_Font* font) {
+        int width, height;
+        SDL_CHK(SDL_GetCurrentRenderOutputSize(renderer, &width, &height));
+        explorer.draw(renderer, {
+            0, 0, 400,
+            static_cast<float>(height)
+        }, font);
+        text.draw(renderer, {
+            400, 0, 
+            static_cast<float>(width),
+            static_cast<float>(height)
+        }, font);
     }
 };
 
+extern struct TTF_Font*& defaultFont;
+
+bool text(
+    SDL_Renderer* renderer,
+    const char* content,
+    SDL_Texture** out,
+    TTF_Font* font,
+    float* width = nullptr,
+    float* height = nullptr,
+    size_t length = 0,
+    SDL_Color color = {255, 255, 255, 255}
+);
+
+static inline SDL_FRect operator+(const SDL_FRect& lhs, const SDL_FPoint& rhs) {
+    return {.x=lhs.x+rhs.x, .y=lhs.y+rhs.y, .w=lhs.w, .h=lhs.h};
+}

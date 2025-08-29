@@ -18,6 +18,8 @@ project "Editor"
     files {
         "src/main.cc",
         "src/editor.cc",
+        "src/textSection.cc",
+        "src/explorerSection.cc",
     }
     libdirs {
         "vendor/SDL/build/%{cfg.buildcfg}",
@@ -77,4 +79,4 @@ project "Editor"
         runtime "Release"
 
 include "vendor/SDL"
-include "vendor/SDL_ttf"
+-- include "vendor/SDL_ttf"

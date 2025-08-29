@@ -3,14 +3,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include "editor.hpp"
-
-// #ifdef DEBUG
-#ifdef SDL_CHK
-#error "redefining SDL_CHK"
-#endif // SDL_CHK
-
-#define SDL_CHK(X) if (!(X)) {fprintf(stderr, "Error at %s:%d: %s", __FILE__, __LINE__, SDL_GetError()); exit(1);}
-// #endif // DEBUG
+#include <util.hpp>
+#include <logging.hpp>
 
 bool handleEvents() {
     SDL_Event event;
@@ -41,44 +35,37 @@ void update() {
     // TODO
 }
 
-void render(SDL_Renderer* renderer, EditorState& state) {
+void render(SDL_Renderer* renderer, EditorState& state, TTF_Font* font) {
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255));
     SDL_CHK(SDL_RenderClear(renderer));
 
-    static auto FreeMono38 = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 38);
-    if (!FreeMono38) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono38 doesn't exist\n");
-        exit(1);
-    }
-    auto surface = TTF_RenderText_Blended(FreeMono38, "text", 0, {220, 220, 220, 255});
-    if (!surface) {
-        return;
-    }
-    SDL_FRect dest{50, 50,
-        static_cast<float>(surface->w),
-        static_cast<float>(surface->h)
-    };
+    state.draw(renderer, font);
 
-    auto texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_DestroySurface(surface);
-    surface = NULL;
-    if (!texture) {
-        return;
-    }
-
-    state.draw(renderer);
-
-    SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, &dest));
     SDL_CHK(SDL_RenderPresent(renderer));
-    SDL_DestroyTexture(texture);
 }
+
+static TTF_Font* FreeMono38;
+TTF_Font*& defaultFont = FreeMono38;
 
 int main(int argc, char* args[]) {
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO));
     SDL_CHK(TTF_Init());
+
+    for (int logLevel = SDL_LOG_CATEGORY_CUSTOM; logLevel < CUSTOM_LOG_CATEGORY_LAST; logLevel++) {
+        SDL_SetLogPriority(logLevel, static_cast<SDL_LogPriority>(0));
+    }
+    SDL_SetLogPriority(CUSTOM_LOG_CATEGORY_EXPLORER, SDL_LOG_PRIORITY_INFO);
+
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_CHK(SDL_CreateWindowAndRenderer("text editor", 1600, 900, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_TRANSPARENT, &window, &renderer));
+
+    FreeMono38 = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 38);
+    if (!FreeMono38) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono38 doesn't exist\n");
+        exit(1);
+    }
+    
     const char* path = ".";
     if (argc > 1) {
         path = args[1];
@@ -86,8 +73,10 @@ int main(int argc, char* args[]) {
     EditorState state{path};
     while (handleEvents()) {
         update();
-        render(renderer, state);
+        render(renderer, state, defaultFont);
     }
+    TTF_CloseFont(FreeMono38);
+    FreeMono38 = NULL;
     TTF_Quit();
     SDL_Quit();
     return 0;
