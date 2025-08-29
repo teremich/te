@@ -20,7 +20,7 @@ void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF
         SDL_DestroyTexture(texture);
         texture = NULL;
         dest.x += dest.w;
-        dest.h += dest.h - 20;
+        dest.y += dest.h - 20;
     }
     if (fileSize-cursor) {
         SDL_CHK(text(
@@ -37,7 +37,7 @@ void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF
         SDL_DestroyTexture(texture);
         texture = NULL;
         dest.x += dest.w;
-        dest.h += dest.h - 20;
+        dest.y += dest.h - 20;
     }
 }
 
@@ -48,7 +48,7 @@ void TextSection::drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const
             dest.y += 10;
             dest.x = dimensions.x;
         }
-        dest.x += 20;
+        dest.x += 18;
     }
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255));
     SDL_CHK(SDL_RenderFillRect(renderer, &dest));
@@ -180,13 +180,23 @@ void TextSection::moveRel(movement to) {
             cursor++;
             break;
         case MOVEMENT_wordWise: // CTRL+LEFT -> one word back
-            while (cursor && !isWordBreak(content[cursor-1], content[cursor])) {
+            if (!cursor) {
+                break;
+            }
+            cursor--;
+            content[cursor+bufferSize] = content[cursor];
+            while (cursor && !isWordBreak(content[cursor-1], content[cursor+bufferSize])) {
                 cursor--;
                 content[cursor+bufferSize] = content[cursor];
             }
             break;
         case MOVEMENT_wordWise+MOVEMENT_forward: // CTRL+RIGHT -> one word forward
-            while (cursor < fileSize && !isWordBreak(content[cursor+bufferSize], content[cursor])) {
+            if (cursor == fileSize) {
+                break;
+            }
+            content[cursor] = content[cursor+bufferSize];
+            cursor++;
+            while (cursor < fileSize && !isWordBreak(content[cursor+bufferSize], content[cursor-1])) {
                 content[cursor] = content[cursor+bufferSize];
                 cursor++;
             }
