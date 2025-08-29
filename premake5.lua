@@ -16,7 +16,8 @@ project "Editor"
     }
     exceptionhandling "Off"
     files {
-        "src/main.cc"
+        "src/main.cc",
+        "src/editor.cc",
     }
     libdirs {
         "vendor/SDL/build/%{cfg.buildcfg}",

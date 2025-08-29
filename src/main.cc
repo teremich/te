@@ -2,6 +2,7 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
+#include "editor.hpp"
 
 // #ifdef DEBUG
 #ifdef SDL_CHK
@@ -40,7 +41,7 @@ void update() {
     // TODO
 }
 
-void render(SDL_Renderer* renderer) {
+void render(SDL_Renderer* renderer, EditorState& state) {
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255));
     SDL_CHK(SDL_RenderClear(renderer));
 
@@ -64,20 +65,28 @@ void render(SDL_Renderer* renderer) {
     if (!texture) {
         return;
     }
+
+    state.draw(renderer);
+
     SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, &dest));
     SDL_CHK(SDL_RenderPresent(renderer));
     SDL_DestroyTexture(texture);
 }
 
-int main() {
+int main(int argc, char* args[]) {
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO));
     SDL_CHK(TTF_Init());
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_CHK(SDL_CreateWindowAndRenderer("text editor", 1600, 900, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_TRANSPARENT, &window, &renderer));
+    const char* path = ".";
+    if (argc > 1) {
+        path = args[1];
+    }
+    EditorState state{path};
     while (handleEvents()) {
         update();
-        render(renderer);
+        render(renderer, state);
     }
     TTF_Quit();
     SDL_Quit();
