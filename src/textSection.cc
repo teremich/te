@@ -186,7 +186,7 @@ void TextSection::moveRel(movement to) {
             }
             break;
         case MOVEMENT_wordWise+MOVEMENT_forward: // CTRL+RIGHT -> one word forward
-            while (cursor < fileSize && !isWordBreak(content[cursor+1], content[cursor])) {
+            while (cursor < fileSize && !isWordBreak(content[cursor+bufferSize], content[cursor])) {
                 content[cursor] = content[cursor+bufferSize];
                 cursor++;
             }
