@@ -20,7 +20,7 @@ void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF
         SDL_DestroyTexture(texture);
         texture = NULL;
         dest.x += dest.w;
-        dest.y += dest.h - 20;
+        dest.y += dest.h - 30;
     }
     if (fileSize-cursor) {
         SDL_CHK(text(
@@ -112,14 +112,26 @@ void TextSection::del(movement to) {
             fileSize--;
             break;
         case MOVEMENT_wordWise: // CTRL+LEFT -> one word back
-            while (cursor && !isWordBreak(content[cursor-1], content[cursor])) {
+            if (!cursor) {
+                break;
+            }
+            cursor--;
+            bufferSize++;
+            fileSize--;
+            while (cursor && !isWordBreak(content[cursor-1], content[cursor+bufferSize])) {
                 cursor--;
                 bufferSize++;
                 fileSize--;
             }
             break;
         case MOVEMENT_wordWise+MOVEMENT_forward: // CTRL+RIGHT -> one word forward
-            while (cursor < fileSize && !isWordBreak(content[cursor+1], content[cursor])) {
+            // TODO: there is a bug in here. it's best you compare this code to the moveRel code that works
+            if (cursor == fileSize) {
+                break;
+            }
+            bufferSize++;
+            fileSize--;
+            while (cursor < fileSize && !isWordBreak(content[cursor+bufferSize], content[cursor-1])) {
                 bufferSize++;
                 fileSize--;
             }
