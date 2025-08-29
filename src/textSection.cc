@@ -1,23 +1,44 @@
 #include "editor.hpp"
-#include "logging.hpp"
-#include "util.hpp"
+#include <util.hpp>
 #include <cstdio>
 
 void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const {
     SDL_Texture* texture = NULL;
     SDL_FRect dest = dimensions;
-    SDL_CHK(text(
-        renderer,
-        content,
-        &texture,
-        font,
-        &dest.w,
-        &dest.h,
-        cursor ? cursor : fileSize,
-        {0, 255, 0, 255}
-    ));
-    SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, &dest));
-    SDL_DestroyTexture(texture);
+    if (cursor) {
+        SDL_CHK(text(
+            renderer,
+            content,
+            &texture,
+            font,
+            &dest.w,
+            &dest.h,
+            cursor,
+            {0, 255, 0, 255}
+        ));
+        SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, &dest));
+        SDL_DestroyTexture(texture);
+        texture = NULL;
+        dest.x += dest.w;
+        dest.h += dest.h - 20;
+    }
+    if (fileSize-cursor) {
+        SDL_CHK(text(
+            renderer,
+            content+cursor+bufferSize,
+            &texture,
+            font,
+            &dest.w,
+            &dest.h,
+            fileSize-cursor,
+            {0, 255, 0, 255}
+        ));
+        SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, &dest));
+        SDL_DestroyTexture(texture);
+        texture = NULL;
+        dest.x += dest.w;
+        dest.h += dest.h - 20;
+    }
 }
 
 void TextSection::drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const {
@@ -27,7 +48,7 @@ void TextSection::drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const
             dest.y += 10;
             dest.x = dimensions.x;
         }
-        dimensions.x += 10;
+        dest.x += 20;
     }
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255));
     SDL_CHK(SDL_RenderFillRect(renderer, &dest));
@@ -51,7 +72,6 @@ void TextSection::open(const char* file) {
         fileHandle = tmpfile();
     }
     assert(fileHandle);
-    SDL_LogDebug(CUSTOM_LOG_CATEGORY_TEXT, "fileHandle: %p\n", fileHandle);
     fseek(fileHandle, 0, SEEK_END);
     fileSize = ftell(fileHandle);
     rewind(fileHandle);

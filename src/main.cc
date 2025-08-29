@@ -104,8 +104,8 @@ void render(SDL_Renderer* renderer, EditorState& state, TTF_Font* font) {
     SDL_CHK(SDL_RenderPresent(renderer));
 }
 
-static TTF_Font* FreeMono38;
-TTF_Font*& defaultFont = FreeMono38;
+static TTF_Font* FreeMono30;
+TTF_Font*& defaultFont = FreeMono30;
 
 int main(int argc, char* args[]) {
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO));
@@ -120,9 +120,9 @@ int main(int argc, char* args[]) {
     SDL_Renderer* renderer = NULL;
     SDL_CHK(SDL_CreateWindowAndRenderer("text editor", 1600, 900, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_TRANSPARENT, &window, &renderer));
 
-    FreeMono38 = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 38);
-    if (!FreeMono38) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono38 doesn't exist\n");
+    FreeMono30 = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 30);
+    if (!FreeMono30) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono in ptsize 30 doesn't exist\n");
         exit(1);
     }
     
@@ -136,8 +136,8 @@ int main(int argc, char* args[]) {
         render(renderer, state, defaultFont);
     }
     state.text.close();
-    TTF_CloseFont(FreeMono38);
-    FreeMono38 = NULL;
+    TTF_CloseFont(FreeMono30);
+    FreeMono30 = NULL;
     TTF_Quit();
     SDL_Quit();
     return 0;

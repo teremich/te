@@ -4,7 +4,6 @@
 #include <filesystem>
 #include <cassert>
 #include <cstring>
-#include <libgen.h>
 #include <vector>
 #include <SDL3/SDL.h>
 #include <util.hpp>
@@ -114,7 +113,7 @@ class ExplorerSection : public Section{
     static const Section::Type type = Section::Type::EXPLORER;
     ExplorerSection() = default;
     ~ExplorerSection() = default;
-    explicit ExplorerSection(const char* path);
+    explicit ExplorerSection(std::filesystem::path absolute);
     void draw(struct SDL_Renderer* renderer, SDL_FRect dimensions, struct TTF_Font* font) const override;
     private:
     std::filesystem::path basePath;
@@ -134,7 +133,8 @@ struct EditorState{
             exit(-ENOMEM);
         }
         strcpy(path, filepath);
-        explorer = ExplorerSection(dirname(path));
+        const auto parent = std::filesystem::absolute(std::filesystem::path(path)).parent_path();
+        explorer = ExplorerSection(parent);
         free(path);
         if (std::filesystem::is_regular_file(filepath)) {
             text.open(filepath);
@@ -145,11 +145,11 @@ struct EditorState{
         int width, height;
         SDL_CHK(SDL_GetCurrentRenderOutputSize(renderer, &width, &height));
         explorer.draw(renderer, {
-            0, 0, 400,
+            0, 0, 420,
             static_cast<float>(height)
         }, font);
         text.draw(renderer, {
-            400, 0, 
+            420, 0, 
             static_cast<float>(width),
             static_cast<float>(height)
         }, font);

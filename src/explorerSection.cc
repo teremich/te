@@ -1,4 +1,5 @@
 #include "editor.hpp"
+#include <filesystem>
 #include <logging.hpp>
 
 using
@@ -20,7 +21,7 @@ static std::vector<directory_entry>::iterator findSpot(std::vector<directory_ent
     return entries.end();
 }
 
-ExplorerSection::ExplorerSection(const char* path) : basePath(path) {
+ExplorerSection::ExplorerSection(std::filesystem::path absolute) : basePath(absolute) {
     for (const auto& entry : directory_iterator(basePath)) {
         entries.insert(findSpot(entries, entry), entry);
     }
@@ -43,7 +44,7 @@ void ExplorerSection::draw(SDL_Renderer* renderer, SDL_FRect dimensions, struct 
     SDL_Texture* texture = NULL;
     SDL_CHK(text(
         renderer,
-        basePath.c_str(),
+        basePath.filename().c_str(),
         &texture,
         font,
         &dest.w,
@@ -54,10 +55,9 @@ void ExplorerSection::draw(SDL_Renderer* renderer, SDL_FRect dimensions, struct 
     texture = NULL;
     dest = dest + SDL_FPoint{20, dest.h+10};
     for (const auto& entry : entries) {
-        SDL_LogDebug(CUSTOM_LOG_CATEGORY_EXPLORER, "%s\n", entry.path().c_str());
         SDL_CHK(text(
             renderer,
-            entry.path().c_str(),
+            entry.path().filename().c_str(),
             &texture,
             font,
             &dest.w,
