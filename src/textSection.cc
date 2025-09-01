@@ -1,54 +1,90 @@
 #include "editor.hpp"
 #include <util.hpp>
 #include <cstdio>
+#include <vector>
+
+static void drawTextChunk(
+    const char* chunk,
+    size_t length,
+    SDL_Renderer* renderer,
+    SDL_Texture* texture,
+    TTF_Font* font,
+    SDL_FRect* dest,
+    float lineBeginning
+) {
+    if (!length) {
+        return;
+    }
+    char* copy = static_cast<char*>(malloc(length));
+    std::memcpy(copy, chunk, length);
+    // copy[length] = 0;
+    std::vector<size_t> lines{0};
+    for (size_t index = 0; index < length; index++) {
+        if (chunk[index] == '\n') {
+            copy[index] = 0;
+            lines.push_back(index+1);
+        }
+    }
+    for (size_t line : lines) {
+        if (line == length) {
+            break;
+        }
+        dest->w = 0;
+        dest->h = 30;
+        if (copy[line]) {
+            SDL_CHK(text(
+                renderer,
+                line+copy,
+                &texture,
+                font,
+                &dest->w,
+                &dest->h,
+                strnlen(line+copy, length-line),
+                {0, 255, 0, 255}
+            ));
+            SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, dest));
+            SDL_DestroyTexture(texture);
+            texture = NULL;
+        }
+        dest->x = lineBeginning;
+        dest->y += dest->h;
+    }
+    if (copy[length-1]) {
+        dest->y -= dest->h;
+    } else {
+        dest->w = 0;
+    }
+    free(copy);
+}
 
 void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const {
     SDL_Texture* texture = NULL;
-    SDL_FRect dest = dimensions;
-    if (cursor) {
-        SDL_CHK(text(
-            renderer,
-            content,
-            &texture,
-            font,
-            &dest.w,
-            &dest.h,
-            cursor,
-            {0, 255, 0, 255}
-        ));
-        SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, &dest));
-        SDL_DestroyTexture(texture);
-        texture = NULL;
-        dest.x += dest.w;
-        dest.y += dest.h - 30;
-    }
-    if (fileSize-cursor) {
-        SDL_CHK(text(
-            renderer,
-            content+cursor+bufferSize,
-            &texture,
-            font,
-            &dest.w,
-            &dest.h,
-            fileSize-cursor,
-            {0, 255, 0, 255}
-        ));
-        SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, &dest));
-        SDL_DestroyTexture(texture);
-        texture = NULL;
-        dest.x += dest.w;
-        dest.y += dest.h - 20;
-    }
+    SDL_FRect dest = {dimensions.x, dimensions.y, 0, 0};
+    drawTextChunk(content, cursor, renderer, texture, font, &dest, dimensions.x);
+    dest.x = dest.w + dimensions.x;
+    drawTextChunk(
+        content+cursor+bufferSize,
+        fileSize-cursor,
+        renderer,
+        texture,
+        font,
+        &dest, dimensions.x
+    );
 }
 
 void TextSection::drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const {
+    static size_t frameCount = 0;
+    frameCount++;
+    if ((frameCount / int(60*0.5)) % 2) {
+        return;
+    }
     SDL_FRect dest = SDL_FRect{dimensions.x, dimensions.y, 2, 40};
     for (size_t c = 0; c < cursor; c++) {
+        dest.x += 18;
         if (content[c] == '\n') {
-            dest.y += 10;
+            dest.y += 30;
             dest.x = dimensions.x;
         }
-        dest.x += 18;
     }
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255));
     SDL_CHK(SDL_RenderFillRect(renderer, &dest));
@@ -95,8 +131,11 @@ void TextSection::write(char c) {
 }
 
 void TextSection::del(movement to) {
+    if (to & MOVEMENT_select) {
+        to -= MOVEMENT_select;
+    }
     switch(to) {
-        case 0: // LEFT -> one char back
+        case 0: // BACKSPACE -> one char back
             if (cursor == 0) {
                 return;
             }
@@ -104,50 +143,42 @@ void TextSection::del(movement to) {
             bufferSize++;
             fileSize--;
             break;
-        case MOVEMENT_forward: // RIGHT -> one char forward
+        case MOVEMENT_forward: // DEL -> one char forward
             if (cursor == fileSize) {
                 return;
             }
             bufferSize++;
             fileSize--;
             break;
-        case MOVEMENT_wordWise: // CTRL+LEFT -> one word back
+        case MOVEMENT_wordWise: { // CTRL+BACKSPACE -> one word back
             if (!cursor) {
                 break;
             }
+            char last = content[cursor-1];
             cursor--;
             bufferSize++;
             fileSize--;
-            while (cursor && !isWordBreak(content[cursor-1], content[cursor+bufferSize])) {
+            while (cursor && !isWordBreak(content[cursor-1], last)) {
+                last = content[cursor-1];
                 cursor--;
                 bufferSize++;
                 fileSize--;
             }
-            break;
-        case MOVEMENT_wordWise+MOVEMENT_forward: // CTRL+RIGHT -> one word forward
+        } break;
+        case MOVEMENT_wordWise+MOVEMENT_forward: { // CTRL+DEL -> one word forward
             // TODO: there is a bug in here. it's best you compare this code to the moveRel code that works
             if (cursor == fileSize) {
                 break;
             }
+            char last = content[cursor+bufferSize];
             bufferSize++;
             fileSize--;
-            while (cursor < fileSize && !isWordBreak(content[cursor+bufferSize], content[cursor-1])) {
+            while (cursor < fileSize && !isWordBreak(content[cursor+bufferSize], last)) {
+                last = content[cursor+bufferSize];
                 bufferSize++;
                 fileSize--;
             }
-            break;
-        case MOVEMENT_full: // HOME -> beginning of line
-            // TODO
-            break;
-        case MOVEMENT_full + MOVEMENT_forward: // END -> end of line
-            // TODO
-            break;
-        case MOVEMENT_full + MOVEMENT_wordWise: // CTRL+HOME -> beginning of file
-            // TODO
-            break;
-        case MOVEMENT_full + MOVEMENT_wordWise + MOVEMENT_forward: // CTRL+END -> end of file
-            // TODO
-            break;
+        } break;
         default:
             return;
     }
@@ -222,7 +253,7 @@ void TextSection::moveRel(movement to) {
                 while (cursor && !end) {
                     cursor--;
                     content[cursor+bufferSize] = content[cursor];
-                    if (content[cursor] == '\n') {
+                    if (content[cursor+bufferSize] == '\n') {
                         end = foundUpperLine;
                         foundUpperLine = true;
                     }
@@ -232,31 +263,45 @@ void TextSection::moveRel(movement to) {
                         col++;
                     }
                 }
-                if (lineSize < 0) {
+                if (lineSize <= 0) {
                     return;
                 }
-                if (!end) {
-                    assert(cursor == 0);
-                    int32_t finalCol = std::min(col, lineSize);
-                    assert(finalCol >= 0);
-                    moveAbs(finalCol+cursor);
+                if (!foundUpperLine) {
+                    return;
                 }
+                if (end) {
+                    content[cursor] = content[cursor+bufferSize];
+                    cursor++;
+                }
+                int32_t finalCol = std::min(col, lineSize-1);
+                assert(finalCol >= 0);
+                moveAbs(finalCol+cursor);
             }
             break;
         case MOVEMENT_lineWise + MOVEMENT_forward: // DOWN -> one line forward
             // TODO
             break;
         case MOVEMENT_full: // HOME -> beginning of line
-            // TODO
+            // TODO:
+            // only go to end of whitespace, or if there is at least one character of and only whitespace up until cursor go to beginning of line
+            while (cursor && content[cursor-1] != '\n') {
+                cursor--;
+                content[cursor+bufferSize] = content[cursor];
+            }
             break;
         case MOVEMENT_full + MOVEMENT_forward: // END -> end of line
-            // TODO
+            while (cursor < fileSize && content[cursor] != '\n') {
+                content[cursor] = content[cursor+bufferSize];
+                cursor++;
+            }
             break;
         case MOVEMENT_full + MOVEMENT_wordWise: // CTRL+HOME -> beginning of file
-            // TODO
+            std::memmove(content+bufferSize, content, cursor);
+            cursor = 0;
             break;
         case MOVEMENT_full + MOVEMENT_wordWise + MOVEMENT_forward: // CTRL+END -> end of file
-            // TODO
+            std::memmove(content, content+cursor+bufferSize, fileSize-cursor);
+            cursor = fileSize;
             break;
         default:
             return;

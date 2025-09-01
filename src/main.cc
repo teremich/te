@@ -2,6 +2,12 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
+#include "SDL3/SDL_events.h"
+#include "SDL3/SDL_hints.h"
+#include "SDL3/SDL_init.h"
+#include "SDL3/SDL_keyboard.h"
+#include "SDL3/SDL_keycode.h"
+#include "SDL3/SDL_log.h"
 #include "editor.hpp"
 #include <util.hpp>
 #include <logging.hpp>
@@ -9,24 +15,9 @@
 static EditorState state;
 
 void keyDown(SDL_KeyboardEvent key) {
-    bool isCaps =
-        (bool)(SDL_GetModState() & (SDL_KMOD_LSHIFT | SDL_KMOD_RSHIFT))
-        ^ (bool)(SDL_GetModState() & SDL_KMOD_CAPS)
-    ;
-    if (
-        SDLK_TAB <= key.key && key.key <= SDLK_TILDE
-        && (key.key <= SDLK_AT || SDLK_LEFTBRACKET <= key.key)
-    ) {
-        char c = static_cast<char>(key.key);
-        if (SDLK_A <= key.key && key.key <= SDLK_Z) {
-            c += isCaps*('A'-'a');
-        }
-        state.text.write(c);
-        return;
-    }
     TextSection::movement mvmnt =
         TextSection::MOVEMENT_wordWise * (bool)(SDL_GetModState() & (SDL_KMOD_CTRL)) +
-        TextSection::MOVEMENT_select * (bool)(SDL_GetModState() & (SDL_KMOD_LSHIFT | SDL_KMOD_RSHIFT));
+        TextSection::MOVEMENT_select * (bool)(SDL_GetModState() & (SDL_KMOD_SHIFT));
     switch(key.key) {
         case SDLK_BACKSPACE:
             state.text.del(mvmnt);
@@ -77,6 +68,11 @@ bool handleEvents() {
                 keyDown(event.key);
                 break;
             // case SDL_EVENT_KEY_UP:
+            case SDL_EVENT_TEXT_INPUT:
+                for (const char* c = event.text.text; *c != 0; c++) {
+                    state.text.write(*c);
+                }
+                break;
             // case SDL_EVENT_WINDOW_RESIZED:
             // case SDL_EVENT_WINDOW_RESTORED:
             // case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -108,17 +104,19 @@ static TTF_Font* FreeMono30;
 TTF_Font*& defaultFont = FreeMono30;
 
 int main(int argc, char* args[]) {
-    SDL_CHK(SDL_Init(SDL_INIT_VIDEO));
+    SDL_CHK(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS));
     SDL_CHK(TTF_Init());
 
     for (int logLevel = SDL_LOG_CATEGORY_CUSTOM; logLevel < CUSTOM_LOG_CATEGORY_LAST; logLevel++) {
         SDL_SetLogPriority(logLevel, SDL_LOG_PRIORITY_TRACE);
     }
     SDL_SetLogPriority(CUSTOM_LOG_CATEGORY_EXPLORER, SDL_LOG_PRIORITY_INFO);
-
+    SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
+    
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_CHK(SDL_CreateWindowAndRenderer("text editor", 1600, 900, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_TRANSPARENT, &window, &renderer));
+    SDL_StartTextInput(window);
 
     FreeMono30 = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 30);
     if (!FreeMono30) {
