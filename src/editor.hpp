@@ -99,9 +99,11 @@ class TextSection : public Section{
     FILE* fileHandle = NULL;
     size_t cursor = 0;
     SDL_FPoint visStart = {0, 0};
+    mutable float width, height;
     size_t fileSize = 0;
     size_t bufferSize = 0;
-    [[maybe_unused]] ssize_t selectionStart = -1;
+    uint64_t lastCursorChange = 0;
+    ssize_t selectionStart = -1;
     // content layout
     // 0                            cursor  cursor+bufferSize bufferSize+fileSize
     // [ beginning of file to cursor ] [ bufferSize ] [ end of file ]
@@ -110,6 +112,7 @@ class TextSection : public Section{
     void flush() const;
     void drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const;
     void drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const;
+    SDL_FRect getCursorPos() const;
     size_t coordsToIndex(int32_t vis_x, int32_t vis_y);
 };
 

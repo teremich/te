@@ -80,15 +80,17 @@
     return file;
 }
 
-// #define fread myfread
-// #define fwrite myfwrite
-// #define fopen myfopen
-// #define fclose myfclose
-// #define tmpfile mytmpfile
-// #define fseek myfseek
-// #define ftell myftell
-// #define rewind myrewind
-// #define freopen myfreopen
+#ifdef LOG_IO_OPS
+#define fread myfread
+#define fwrite myfwrite
+#define fopen myfopen
+#define fclose myfclose
+#define tmpfile mytmpfile
+#define fseek myfseek
+#define ftell myftell
+#define rewind myrewind
+#define freopen myfreopen
+#endif
 
 static void drawTextChunk(
     const char* chunk,
@@ -173,6 +175,10 @@ size_t TextSection::coordsToIndex(int32_t window_x, int32_t window_y) {
 
 void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const {
     SDL_Texture* texture = NULL;
+    if (visStart.x != 0 || visStart.y != 0) {
+        SDL_LogCritical(CUSTOM_LOG_CATEGORY_TEXT, "can't draw when visStart is not {0, 0}\n");
+        exit(1);
+    }
     SDL_FRect dest = {dimensions.x, dimensions.y, 0, 0};
     drawTextChunk(content, cursor, renderer, texture, font, &dest, dimensions.x);
     dest.x = dest.w + dimensions.x;
@@ -186,20 +192,27 @@ void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF
     );
 }
 
-void TextSection::drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const {
-    static size_t frameCount = 0;
-    frameCount++;
-    if ((frameCount / int(60*0.5)) % 2) {
-        return;
-    }
-    SDL_FRect dest = SDL_FRect{dimensions.x, dimensions.y, 2, 40};
+SDL_FRect TextSection::getCursorPos() const {
+    SDL_FRect dest = SDL_FRect{0, 0, 2, 40};
+    dest.y = -visStart.y;
     for (size_t c = 0; c < cursor; c++) {
         dest.x += 18;
         if (content[c] == '\n') {
             dest.y += 30;
-            dest.x = dimensions.x;
+            dest.x = -visStart.x;
         }
     }
+    return dest;
+}
+
+void TextSection::drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const {
+    auto now = SDL_GetTicks();
+    if (((now-lastCursorChange) / int(1000*0.5)) % 2) {
+        return;
+    }
+    SDL_FRect dest = getCursorPos();
+    dest.x += dimensions.x;
+    dest.y += dimensions.y;
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255));
     SDL_CHK(SDL_RenderFillRect(renderer, &dest));
 }
@@ -208,6 +221,8 @@ void TextSection::draw(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* f
     dimensions = dimensions + SDL_FPoint{50, 50};
     dimensions.w -= 50;
     dimensions.h -= 50;
+    width = dimensions.w;
+    height = dimensions.h;
     drawCursor(renderer, dimensions);
     if (!fileSize) {
         return;
@@ -226,19 +241,23 @@ void TextSection::open(const char* file) {
     fseek(fileHandle, 0, SEEK_END);
     fileSize = ftell(fileHandle);
     rewind(fileHandle);
+    free(content);
     content = static_cast<char*>(malloc(fileSize+1024));
     if (!content) {
         exit(-ENOMEM);
     }
+    cursor = 0;
     bufferSize = 1024;
-    assert(cursor == 0);
+    // what about big files? do we lazy load lower lines as the user scrolls down?
     fread(content+cursor+bufferSize, fileSize, 1, fileHandle);
     if (file) {
         freopen(file, "w+", fileHandle);
+        save();
     }
 }
 
 void TextSection::write(char c) {
+    lastCursorChange = SDL_GetTicks();
     if (!bufferSize) {
         grow();
     }
@@ -246,9 +265,17 @@ void TextSection::write(char c) {
     bufferSize--;
     fileSize++;
     cursor++;
+    const auto cursorPos = getCursorPos();
+    if (cursorPos.y >= height) {
+        visStart.y = cursorPos.y - height - 30;
+    }
+    if (cursorPos.y < 0) {
+        visStart.y = cursorPos.y;
+    }
 }
 
 void TextSection::del(movement to) {
+    lastCursorChange = SDL_GetTicks();
     if (to & MOVEMENT_select) {
         to -= MOVEMENT_select;
     }
@@ -325,17 +352,18 @@ void TextSection::saveas(const char* newFile) {
 }
 
 void TextSection::moveRel(movement to) {
+    lastCursorChange = SDL_GetTicks();
     switch(to) {
         case 0: // LEFT -> one char back
             if (cursor == 0) {
-                return;
+                break;
             }
             cursor--;
             content[cursor+bufferSize] = content[cursor];
             break;
         case MOVEMENT_forward: // RIGHT -> one char forward
             if (cursor == fileSize) {
-                return;
+                break;
             }
             content[cursor] = content[cursor+bufferSize];
             cursor++;
@@ -382,22 +410,41 @@ void TextSection::moveRel(movement to) {
                     }
                 }
                 if (lineSize <= 0) {
-                    return;
+                    break;
                 }
                 if (!foundUpperLine) {
-                    return;
+                    break;
                 }
                 if (end) {
                     content[cursor] = content[cursor+bufferSize];
                     cursor++;
                 }
-                int32_t finalCol = std::min(col, lineSize-1);
+                int32_t finalCol = std::min(col, lineSize);
                 assert(finalCol >= 0);
                 moveAbs(finalCol+cursor);
             }
             break;
         case MOVEMENT_lineWise + MOVEMENT_forward: // DOWN -> one line forward
-            // TODO
+            {
+                int col = 0;
+                for (size_t i = cursor-1; i != -1UL; i--) {
+                    if (content[i] == '\n') {
+                        break;
+                    }
+                    col++;
+                }
+                size_t end = cursor;
+                while (end < fileSize && content[end+bufferSize] != '\n') {
+                    end++;
+                }
+                size_t pos = end + (end < fileSize);
+                for (
+                    ;
+                    pos < fileSize && content[pos+bufferSize] != '\n' && pos <= end+col;
+                    pos++
+                ) {}
+                moveAbs(pos);
+            }
             break;
         case MOVEMENT_full: // HOME -> beginning of line
             // TODO:
@@ -427,6 +474,7 @@ void TextSection::moveRel(movement to) {
 }
 
 void TextSection::moveAbs(size_t to) {
+    lastCursorChange = SDL_GetTicks();
     if (to > cursor) {
         // cursor moves right
         std::memmove(content+cursor, content+cursor+bufferSize, to-cursor);
@@ -447,10 +495,8 @@ TextSection::~TextSection() {
         fclose(fileHandle);
         fileHandle = NULL;
     }
-    if (content) {
-        free(content);
-        content = nullptr;
-    }
+    free(content);
+    content = nullptr;
 }
 
 TextSection::TextSection() {}
@@ -463,6 +509,7 @@ void TextSection::grow(size_t newSize) {
         exit(-ENOMEM);
     }
     bufferSize = newSize;
+    std::memmove(content+cursor+bufferSize, content+cursor, fileSize-cursor);
 }
 
 void TextSection::flush() const {

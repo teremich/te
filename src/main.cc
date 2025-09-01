@@ -23,6 +23,21 @@ static void SDLCALL saveFileCallback(void *userdata, const char * const *filelis
     text->saveas(filelist[0]);
 }
 
+static void SDLCALL openFileCallback(void* userdata, const char * const *filelist, int filter) {
+    UNUSED(filter);
+    if (!filelist) {
+        return;
+    }
+    if (!filelist[0]) {
+        return;
+    }
+    if (!*filelist[0]) {
+        return;
+    }
+    TextSection* text = std::bit_cast<TextSection*>(userdata);
+    text->open(filelist[0]);
+}
+
 void keyDown(SDL_KeyboardEvent key) {
     TextSection::movement mvmnt =
         TextSection::MOVEMENT_wordWise * (bool)(SDL_GetModState() & (SDL_KMOD_CTRL)) +
@@ -77,6 +92,11 @@ void keyDown(SDL_KeyboardEvent key) {
         }
         return;
     }
+    if (SDLK_O == key.key && (bool)(SDL_GetModState() & (SDL_KMOD_LCTRL))) {
+        SDL_Event tmp{.key = key};
+        SDL_ShowOpenFileDialog(openFileCallback, &state.text, SDL_GetWindowFromEvent(&tmp), NULL, 0, NULL, 1);
+        return;
+    }
 }
 
 bool handleEvents() {
@@ -117,7 +137,7 @@ void update() {
     // may be useless
 }
 
-void render(SDL_Renderer* renderer, EditorState& state, TTF_Font* font) {
+void render(SDL_Renderer* renderer, TTF_Font* font) {
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255));
     SDL_CHK(SDL_RenderClear(renderer));
 
@@ -157,7 +177,7 @@ int main(int argc, char* args[]) {
     state = EditorState{path};
     while (handleEvents()) {
         update();
-        render(renderer, state, defaultFont);
+        render(renderer, defaultFont);
     }
     state.text.close();
     TTF_CloseFont(FreeMono30);
