@@ -4,6 +4,7 @@
 #include <util.hpp>
 #include <cstdio>
 #include <vector>
+#include <algorithm>
 
 [[maybe_unused]] static inline size_t myfread(
     void *__restrict __ptr,
@@ -99,7 +100,7 @@ static void drawTextChunk(
     SDL_Texture* texture,
     TTF_Font* font,
     SDL_FRect* dest,
-    float lineBeginning
+    SDL_FRect dimensions
 ) {
     if (!length) {
         return;
@@ -121,21 +122,36 @@ static void drawTextChunk(
         dest->w = 0;
         dest->h = 30;
         if (copy[line]) {
+            size_t lineSize = strnlen(line+copy, length-line);
+            size_t lineOffset = std::clamp((size_t)(dimensions.w/18), (size_t)0, lineSize);
             SDL_CHK(text(
                 renderer,
-                line+copy,
+                line + copy + lineOffset,
                 &texture,
                 font,
                 &dest->w,
                 &dest->h,
-                strnlen(line+copy, length-line),
+                lineSize - lineOffset,
                 {0, 255, 0, 255}
             ));
-            SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, dest));
+            if (dest->y - dimensions.y >= dimensions.h) {
+                dest->y -= dimensions.h;
+                if (dest->x - dimensions.x >= dimensions.w) {
+                    dest->x -= dimensions.w;
+                    SDL_CHK(SDL_RenderTexture(renderer, texture, NULL, dest));
+                    dest->x += dimensions.w;
+                } else {
+                    SDL_LogCritical(
+                        CUSTOM_LOG_CATEGORY_TEXT,
+                        "can't render when visStart.x > 0\n"
+                    );
+                }
+                dest->y += dimensions.h;
+            }
             SDL_DestroyTexture(texture);
             texture = NULL;
         }
-        dest->x = lineBeginning;
+        dest->x = dimensions.x;
         dest->y += dest->h;
     }
     if (copy[length-1]) {
@@ -175,12 +191,16 @@ size_t TextSection::coordsToIndex(int32_t window_x, int32_t window_y) {
 
 void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const {
     SDL_Texture* texture = NULL;
-    if (visStart.x != 0 || visStart.y != 0) {
-        SDL_LogCritical(CUSTOM_LOG_CATEGORY_TEXT, "can't draw when visStart is not {0, 0}\n");
-        exit(1);
-    }
-    SDL_FRect dest = {dimensions.x, dimensions.y, 0, 0};
-    drawTextChunk(content, cursor, renderer, texture, font, &dest, dimensions.x);
+    SDL_FRect dest = dimensions;
+    drawTextChunk(
+        content,
+        cursor,
+        renderer,
+        texture,
+        font,
+        &dest,
+        {dimensions.x, dimensions.y, visStart.x, visStart.y}
+    );
     dest.x = dest.w + dimensions.x;
     drawTextChunk(
         content+cursor+bufferSize,
@@ -188,7 +208,8 @@ void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF
         renderer,
         texture,
         font,
-        &dest, dimensions.x
+        &dest,
+        {dimensions.x, dimensions.y, visStart.x, visStart.y}
     );
 }
 
@@ -471,6 +492,13 @@ void TextSection::moveRel(movement to) {
         default:
             return;
     }
+    const auto cursorPos = getCursorPos();
+    if (cursorPos.y >= height) {
+        visStart.y = cursorPos.y - height - 30;
+    }
+    if (cursorPos.y < 0) {
+        visStart.y = cursorPos.y;
+    }
 }
 
 void TextSection::moveAbs(size_t to) {
@@ -486,7 +514,7 @@ void TextSection::moveAbs(size_t to) {
 }
 
 void TextSection::moveAbs(int32_t x, int32_t y) {
-    moveAbs(coordsToIndex(x, y));
+    moveAbs(coordsToIndex(x-50-EditorState::textOffset+9, y-50));
 }
 
 TextSection::~TextSection() {

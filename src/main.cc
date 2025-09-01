@@ -2,6 +2,7 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
+#include "SDL3/SDL_events.h"
 #include "editor.hpp"
 #include <util.hpp>
 #include <logging.hpp>
@@ -76,9 +77,9 @@ void keyDown(SDL_KeyboardEvent key) {
         default:
             break;
     }
+    SDL_Event tmp{.key = key};
     if (SDLK_S == key.key && (bool)(SDL_GetModState() & (SDL_KMOD_LCTRL))) {
         if(!state.text.hasOpenFile() || (bool)(SDL_GetModState() & (SDL_KMOD_SHIFT))) {
-            SDL_Event tmp{.key = key};
             SDL_ShowSaveFileDialog(
                 saveFileCallback,
                 &state.text,
@@ -93,7 +94,6 @@ void keyDown(SDL_KeyboardEvent key) {
         return;
     }
     if (SDLK_O == key.key && (bool)(SDL_GetModState() & (SDL_KMOD_LCTRL))) {
-        SDL_Event tmp{.key = key};
         SDL_ShowOpenFileDialog(openFileCallback, &state.text, SDL_GetWindowFromEvent(&tmp), NULL, 0, NULL, 1);
         return;
     }

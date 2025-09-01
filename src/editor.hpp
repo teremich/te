@@ -108,6 +108,12 @@ class TextSection : public Section{
     // 0                            cursor  cursor+bufferSize bufferSize+fileSize
     // [ beginning of file to cursor ] [ bufferSize ] [ end of file ]
     char* content = nullptr;
+    // TODO:
+    // make a new content struct something like:
+    // struct {
+    //  uint32_t length;
+    //  char* line; 
+    // } *content;
     void grow(size_t newSize = 1024);
     void flush() const;
     void drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const;
@@ -132,6 +138,7 @@ struct EditorState{
     TextSection text;
     ExplorerSection explorer;
     EditorState() = default;
+    static constexpr float textOffset = 420;
     explicit EditorState(const char* filepath) {
         if (!filepath) {
             return;
@@ -159,11 +166,11 @@ struct EditorState{
         int width, height;
         SDL_CHK(SDL_GetCurrentRenderOutputSize(renderer, &width, &height));
         explorer.draw(renderer, {
-            0, 0, 420,
+            0, 0, textOffset,
             static_cast<float>(height)
         }, font);
         text.draw(renderer, {
-            420, 0, 
+            textOffset, 0, 
             static_cast<float>(width),
             static_cast<float>(height)
         }, font);
@@ -187,4 +194,8 @@ std::string fileDialog();
 
 static inline SDL_FRect operator+(const SDL_FRect& lhs, const SDL_FPoint& rhs) {
     return {.x=lhs.x+rhs.x, .y=lhs.y+rhs.y, .w=lhs.w, .h=lhs.h};
+}
+
+inline SDL_FPoint toPoint(const SDL_FRect& rect) {
+    return {rect.x, rect.y};
 }
