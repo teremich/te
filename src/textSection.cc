@@ -1,7 +1,94 @@
 #include "editor.hpp"
+#include "logging.hpp"
+#include <cstddef>
 #include <util.hpp>
 #include <cstdio>
 #include <vector>
+
+[[maybe_unused]] static inline size_t myfread(
+    void *__restrict __ptr,
+    size_t __size,
+    size_t __n,
+    FILE *__restrict __stream
+) {
+    size_t read = fread(__ptr, __size, __n, __stream);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fread(%p, %zu, %zu, %p) -> %zu\n", __ptr, __size, __n, __stream, read);
+    return read;
+}
+    
+[[maybe_unused]] static inline size_t myfwrite(
+    const void *__restrict __ptr,
+    size_t __size,
+    size_t __n,
+    FILE *__restrict __s
+) {
+    size_t written = fwrite(__ptr, __size, __n, __s);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fwrite(%p, %zu, %zu, %p) -> %zu\n", __ptr, __size, __n, __s, written);
+    return written;
+}
+        
+[[maybe_unused]] static inline FILE *myfopen(
+    const char *__restrict __filename,
+    const char *__restrict __modes
+) {
+    FILE* file = fopen(__filename, __modes);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fopen(%s, %s) -> %p\n", __filename, __modes, file);
+    return file;
+}
+            
+[[maybe_unused]] static inline int myfclose(
+    FILE *__stream
+) {
+    int ret = fclose(__stream);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fclose(%p) -> %d\n", __stream, ret);
+    return ret;
+}
+
+[[maybe_unused]] static inline FILE* mytmpfile() {
+    FILE* file = tmpfile();
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "tmpfile() -> %p\n", file);
+    return file;
+}
+
+[[maybe_unused]] static inline int myfseek(
+    FILE *__stream,
+    long __off,
+    int __whence
+) {
+    int ret = fseek(__stream, __off, __whence);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fseek(%p, %ld, %d) -> %d\n", __stream, __off, __whence, ret);
+    return ret;
+}
+[[maybe_unused]] static inline long myftell(FILE*__stream) {
+    long ret = ftell(__stream);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "ftell(%p) -> %ld\n", __stream, ret);
+    return ret;
+}
+[[maybe_unused]] static inline void myrewind(FILE *__stream) {
+    rewind(__stream);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "rewind(%p) -> void\n", __stream);
+    return;
+}
+
+[[maybe_unused]] static inline FILE* myfreopen(
+    const char *__restrict __filename,
+    const char *__restrict __modes,
+    FILE *__restrict __stream
+) {
+    FILE* file = freopen(__filename, __modes, __stream);
+    SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "freopen(%s, %s, %p) -> %p\n", __filename, __modes, __stream, file);
+    return file;
+}
+
+// #define fread myfread
+// #define fwrite myfwrite
+// #define fopen myfopen
+// #define fclose myfclose
+// #define tmpfile mytmpfile
+// #define fseek myfseek
+// #define ftell myftell
+// #define rewind myrewind
+// #define freopen myfreopen
 
 static void drawTextChunk(
     const char* chunk,
@@ -57,6 +144,33 @@ static void drawTextChunk(
     free(copy);
 }
 
+size_t TextSection::coordsToIndex(int32_t window_x, int32_t window_y) {
+    const size_t y = visStart.y + window_y;
+    const size_t x = visStart.x + window_x;
+    const size_t row = y/30;
+    const size_t col = x/18;
+    size_t currentRow = 0;
+    size_t currentCol = 0;
+    size_t index = 0;
+    size_t i;
+    for (i = 0; currentRow < row && i < fileSize; i++) {
+        index = i + bufferSize*(i >= cursor);
+        currentCol++;
+        if (content[index] == '\n') {
+            currentRow++;
+            currentCol = 0;
+        }
+    }
+    for (; currentCol < col && i < fileSize; i++) {
+        index = i + bufferSize*(i >= cursor);
+        currentCol++;
+        if (content[index] == '\n') {
+            break;
+        }
+    }
+    return i;
+}
+
 void TextSection::drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const {
     SDL_Texture* texture = NULL;
     SDL_FRect dest = {dimensions.x, dimensions.y, 0, 0};
@@ -102,8 +216,9 @@ void TextSection::draw(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* f
 }
 
 void TextSection::open(const char* file) {
+    close();
     if (file) {
-        fileHandle = fopen(file, "w+");
+        fileHandle = fopen(file, "r+");
     } else {
         fileHandle = tmpfile();
     }
@@ -118,6 +233,9 @@ void TextSection::open(const char* file) {
     bufferSize = 1024;
     assert(cursor == 0);
     fread(content+cursor+bufferSize, fileSize, 1, fileHandle);
+    if (file) {
+        freopen(file, "w+", fileHandle);
+    }
 }
 
 void TextSection::write(char c) {
@@ -200,7 +318,7 @@ void TextSection::save() const {
 
 void TextSection::saveas(const char* newFile) {
     if (fileHandle) {
-        fclose(fileHandle);
+        close();
     }
     fileHandle = fopen(newFile, "w+");
     save();
@@ -317,6 +435,10 @@ void TextSection::moveAbs(size_t to) {
         std::memmove(content+to+bufferSize, content+to, cursor-to);
     }
     cursor = to;
+}
+
+void TextSection::moveAbs(int32_t x, int32_t y) {
+    moveAbs(coordsToIndex(x, y));
 }
 
 TextSection::~TextSection() {

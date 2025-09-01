@@ -2,17 +2,26 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
-#include "SDL3/SDL_events.h"
-#include "SDL3/SDL_hints.h"
-#include "SDL3/SDL_init.h"
-#include "SDL3/SDL_keyboard.h"
-#include "SDL3/SDL_keycode.h"
-#include "SDL3/SDL_log.h"
 #include "editor.hpp"
 #include <util.hpp>
 #include <logging.hpp>
 
 static EditorState state;
+
+static void SDLCALL saveFileCallback(void *userdata, const char * const *filelist, int filter) {
+    UNUSED(filter);
+    if (!filelist) {
+        return;
+    }
+    if (!filelist[0]) {
+        return;
+    }
+    if (!*filelist[0]) {
+        return;
+    }
+    TextSection* text = std::bit_cast<TextSection*>(userdata);
+    text->saveas(filelist[0]);
+}
 
 void keyDown(SDL_KeyboardEvent key) {
     TextSection::movement mvmnt =
@@ -52,7 +61,22 @@ void keyDown(SDL_KeyboardEvent key) {
         default:
             break;
     }
-
+    if (SDLK_S == key.key && (bool)(SDL_GetModState() & (SDL_KMOD_LCTRL))) {
+        if(!state.text.hasOpenFile() || (bool)(SDL_GetModState() & (SDL_KMOD_SHIFT))) {
+            SDL_Event tmp{.key = key};
+            SDL_ShowSaveFileDialog(
+                saveFileCallback,
+                &state.text,
+                SDL_GetWindowFromEvent(&tmp),
+                NULL,
+                0,
+                "."
+            );
+        } else {
+            state.text.save();
+        }
+        return;
+    }
 }
 
 bool handleEvents() {
@@ -62,7 +86,9 @@ bool handleEvents() {
             case SDL_EVENT_QUIT:
                 return false;
             // case SDL_EVENT_MOUSE_MOTION:
-            // case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                state.text.moveAbs(event.button.x, event.button.y);
+                break;
             // case SDL_EVENT_MOUSE_BUTTON_UP:
             case SDL_EVENT_KEY_DOWN:
                 keyDown(event.key);
@@ -88,7 +114,7 @@ bool handleEvents() {
 }
 
 void update() {
-    // TODO
+    // may be useless
 }
 
 void render(SDL_Renderer* renderer, EditorState& state, TTF_Font* font) {

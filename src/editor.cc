@@ -28,5 +28,3 @@ bool text(
     *out = texture;
     return true;
 }
-
-

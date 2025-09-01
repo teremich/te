@@ -79,6 +79,10 @@ class TextSection : public Section{
     void saveas(const char* newFile);
     void moveRel(movement to);
     void moveAbs(size_t to);
+    void moveAbs(int32_t x, int32_t y);
+    const FILE* hasOpenFile() const {
+        return fileHandle;
+    }
     ~TextSection();
     TextSection();
     TextSection& operator=(TextSection&& moveFrom) {
@@ -106,6 +110,7 @@ class TextSection : public Section{
     void flush() const;
     void drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const;
     void drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const;
+    size_t coordsToIndex(int32_t vis_x, int32_t vis_y);
 };
 
 class ExplorerSection : public Section{
@@ -138,8 +143,14 @@ struct EditorState{
         free(path);
         if (std::filesystem::is_regular_file(filepath)) {
             text.open(filepath);
+        } else {
+            text.open(nullptr);
         }
-        text.open(nullptr);
+    }
+    EditorState& operator=(EditorState&& moveFrom) {
+        text = std::move(moveFrom.text);
+        explorer = std::move(moveFrom.explorer);
+        return *this;
     }
     void draw(SDL_Renderer* renderer, struct TTF_Font* font) {
         int width, height;
@@ -168,6 +179,8 @@ bool text(
     size_t length = 0,
     SDL_Color color = {255, 255, 255, 255}
 );
+
+std::string fileDialog();
 
 static inline SDL_FRect operator+(const SDL_FRect& lhs, const SDL_FPoint& rhs) {
     return {.x=lhs.x+rhs.x, .y=lhs.y+rhs.y, .w=lhs.w, .h=lhs.h};
