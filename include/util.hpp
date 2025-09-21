@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+
 // #ifdef DEBUG
 #ifdef SDL_CHK
 #error "redefining SDL_CHK"
@@ -9,3 +11,8 @@
 // #endif // DEBUG
 
 #define UNUSED(x) (void)(x)
+
+struct Array{
+    char* content;
+    size_t size;
+};

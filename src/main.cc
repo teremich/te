@@ -37,7 +37,7 @@
 }
 
 void keyDown(SDL_KeyboardEvent key) {
-    UNUSED(key);
+    static_cast<void>(key);
 }
 
 bool handleEvents() {

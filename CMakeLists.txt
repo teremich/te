@@ -35,6 +35,7 @@ link_directories(
     vendor/SDL_ttf/build/debug/
 )
 include_directories(${SDL3_INCLUDE_FILES})
+add_compile_options(-march=native)
 
 add_executable(Editor
     src/main.cc
@@ -42,7 +43,6 @@ add_executable(Editor
     src/textSection.cc
     src/explorerSection.cc
 )
-add_compile_options(-march=native)
 target_include_directories(Editor PRIVATE
     vendor/SDL_ttf/include/
     include/
