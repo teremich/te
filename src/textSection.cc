@@ -374,6 +374,7 @@ void TextSection::saveas(const char* newFile) {
 }
 
 void TextSection::moveRel(movement to) {
+    static int maxCol = 0;
     lastCursorChange = SDL_GetTicks();
     switch(to) {
         case 0: // LEFT -> one char back
@@ -431,6 +432,9 @@ void TextSection::moveRel(movement to) {
                         col++;
                     }
                 }
+                if (maxCol) {
+                    col = maxCol;
+                }
                 if (lineSize <= 0) {
                     break;
                 }
@@ -441,7 +445,11 @@ void TextSection::moveRel(movement to) {
                     content[cursor] = content[cursor+bufferSize];
                     cursor++;
                 }
-                int32_t finalCol = std::min(col, lineSize);
+                int32_t finalCol = col;
+                if (lineSize < col) {
+                    finalCol = lineSize;
+                }
+                
                 assert(finalCol >= 0);
                 moveAbs(finalCol+cursor);
             }
@@ -495,10 +503,10 @@ void TextSection::moveRel(movement to) {
     }
     const auto cursorPos = getCursorPos();
     if (cursorPos.y >= height) {
-        visStart.y = cursorPos.y - height - 30;
+        visStart.y += 30;
     }
     if (cursorPos.y < 0) {
-        visStart.y = cursorPos.y;
+        visStart.y -= 30;
     }
 }
 
