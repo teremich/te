@@ -2,7 +2,7 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
-#include "editor.hpp"
+#include <editor.hpp>
 #include <util.hpp>
 #include <logging.hpp>
 
@@ -87,6 +87,30 @@ static TTF_Font* FreeMono30;
 TTF_Font*& defaultFont = FreeMono30;
 
 int main(int argc, char* argv[]) {
+
+    Text text{};
+    text.insert('H');
+    text.insert('e');
+    text.insert('l');
+    text.insert('l');
+    text.insert('o');
+    text.insert(' ');
+    text.insert('W');
+    text.insert('o');
+    text.insert('r');
+    text.insert('l');
+    text.insert('d');
+    text.insert('!');
+    text.insert('\n');
+    text.insert("Hello, again!\n");
+
+    for (char c : text) {
+        printf("%c", c);
+    }
+
+    return 0;
+
+
     UNUSED(argc);
     UNUSED(argv);
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS));
