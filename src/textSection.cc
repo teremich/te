@@ -16,7 +16,7 @@
     SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fread(%p, %zu, %zu, %p) -> %zu\n", __ptr, __size, __n, __stream, read);
     return read;
 }
-    
+
 [[maybe_unused]] static inline size_t myfwrite(
     const void *__restrict __ptr,
     size_t __size,
@@ -27,7 +27,7 @@
     SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fwrite(%p, %zu, %zu, %p) -> %zu\n", __ptr, __size, __n, __s, written);
     return written;
 }
-        
+
 [[maybe_unused]] static inline FILE *myfopen(
     const char *__restrict __filename,
     const char *__restrict __modes
@@ -36,7 +36,7 @@
     SDL_LogTrace(CUSTOM_LOG_CATEGORY_INPUT, "fopen(%s, %s) -> %p\n", __filename, __modes, file);
     return file;
 }
-            
+
 [[maybe_unused]] static inline int myfclose(
     FILE *__stream
 ) {
@@ -103,6 +103,7 @@ static void drawTextChunk(
     SDL_FRect dimensions
 ) {
     if (!length) {
+        dest->w = 0;
         return;
     }
     char* copy = static_cast<char*>(malloc(length));
@@ -162,9 +163,9 @@ static void drawTextChunk(
     free(copy);
 }
 
-size_t TextSection::coordsToIndex(int32_t window_x, int32_t window_y) {
-    const size_t y = visStart.y + window_y;
-    const size_t x = visStart.x + window_x;
+constexpr size_t TextSection::coordsToIndex(int32_t pos_x, int32_t pos_y) const {
+    const size_t y = visStart.y + pos_y;
+    const size_t x = visStart.x + pos_x;
     const size_t row = y/30;
     const size_t col = x/18;
     size_t currentRow = 0;

@@ -110,16 +110,15 @@ class TextSection : public Section{
     char* content = nullptr;
     // TODO:
     // make a new content struct something like:
-    // struct {
-    //  uint32_t length;
-    //  char* line; 
-    // } *content;
+    // struct rope{
+    // …
+    // } content;
     void grow(size_t newSize = 1024);
     void flush() const;
     void drawFileText(SDL_Renderer* renderer, SDL_FRect dimensions, TTF_Font* font) const;
     void drawCursor(SDL_Renderer* renderer, SDL_FRect dimensions) const;
     SDL_FRect getCursorPos() const;
-    size_t coordsToIndex(int32_t vis_x, int32_t vis_y);
+    constexpr size_t coordsToIndex(int32_t vis_x, int32_t vis_y) const;
 };
 
 class ExplorerSection : public Section{
@@ -129,6 +128,9 @@ class ExplorerSection : public Section{
     ~ExplorerSection() = default;
     explicit ExplorerSection(std::filesystem::path absolute);
     void draw(struct SDL_Renderer* renderer, SDL_FRect dimensions, struct TTF_Font* font) const override;
+    const char* getPath() const {
+        return basePath.c_str();
+    }
     private:
     std::filesystem::path basePath;
     std::vector<std::filesystem::directory_entry> entries;

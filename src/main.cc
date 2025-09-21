@@ -2,7 +2,6 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
 #include <cstdlib>
-#include "SDL3/SDL_events.h"
 #include "editor.hpp"
 #include <util.hpp>
 #include <logging.hpp>
@@ -40,43 +39,6 @@ static void SDLCALL openFileCallback(void* userdata, const char * const *filelis
 }
 
 void keyDown(SDL_KeyboardEvent key) {
-    TextSection::movement mvmnt =
-        TextSection::MOVEMENT_wordWise * (bool)(SDL_GetModState() & (SDL_KMOD_CTRL)) +
-        TextSection::MOVEMENT_select * (bool)(SDL_GetModState() & (SDL_KMOD_SHIFT));
-    switch(key.key) {
-        case SDLK_BACKSPACE:
-            state.text.del(mvmnt);
-            return;
-        case SDLK_DELETE:
-            mvmnt += TextSection::MOVEMENT_forward;
-            state.text.del(mvmnt);
-            return;
-        case SDLK_DOWN:
-            mvmnt += TextSection::MOVEMENT_forward;
-            [[fallthrough]];
-        case SDLK_UP:
-            mvmnt += TextSection::MOVEMENT_lineWise;
-            state.text.moveRel(mvmnt);
-            return;
-        case SDLK_RIGHT:
-            mvmnt += TextSection::MOVEMENT_forward;
-            [[fallthrough]];
-        case SDLK_LEFT:
-            state.text.moveRel(mvmnt);
-            return;
-        case SDLK_END:
-            mvmnt += TextSection::MOVEMENT_forward;
-            [[fallthrough]];
-        case SDLK_HOME:
-            mvmnt += TextSection::MOVEMENT_full;
-            state.text.moveRel(mvmnt);
-            return;
-        case SDLK_RETURN:
-            state.text.write('\n');
-            return;
-        default:
-            break;
-    }
     SDL_Event tmp{.key = key};
     if (SDLK_S == key.key && (bool)(SDL_GetModState() & (SDL_KMOD_LCTRL))) {
         if(!state.text.hasOpenFile() || (bool)(SDL_GetModState() & (SDL_KMOD_SHIFT))) {
@@ -86,7 +48,7 @@ void keyDown(SDL_KeyboardEvent key) {
                 SDL_GetWindowFromEvent(&tmp),
                 NULL,
                 0,
-                "."
+                state.explorer.getPath()
             );
         } else {
             state.text.save();
@@ -94,7 +56,15 @@ void keyDown(SDL_KeyboardEvent key) {
         return;
     }
     if (SDLK_O == key.key && (bool)(SDL_GetModState() & (SDL_KMOD_LCTRL))) {
-        SDL_ShowOpenFileDialog(openFileCallback, &state.text, SDL_GetWindowFromEvent(&tmp), NULL, 0, NULL, 1);
+        SDL_ShowOpenFileDialog(
+            openFileCallback,
+            &state.text,
+            SDL_GetWindowFromEvent(&tmp),
+            NULL,
+            0,
+            state.explorer.getPath(),
+            1
+        );
         return;
     }
 }
@@ -134,15 +104,46 @@ bool handleEvents() {
 }
 
 void update() {
-    // may be useless
+    int numkeys = 0;
+    const bool* keyboard = SDL_GetKeyboardState(&numkeys);
+    
+    TextSection::movement mvmnt = 
+        TextSection::MOVEMENT_wordWise * (bool)(SDL_GetModState() & (SDL_KMOD_CTRL)) +
+        TextSection::MOVEMENT_select * (bool)(SDL_GetModState() & (SDL_KMOD_SHIFT));
+    if (keyboard[SDL_SCANCODE_DELETE] || keyboard[SDL_SCANCODE_BACKSPACE]) {
+        mvmnt += TextSection::MOVEMENT_forward * keyboard[SDL_SCANCODE_DELETE];
+        state.text.del(mvmnt);
+        return;
+    }
+    if (keyboard[SDL_SCANCODE_DOWN] || keyboard[SDL_SCANCODE_UP]) {
+        mvmnt += TextSection::MOVEMENT_forward * keyboard[SDL_SCANCODE_DOWN];
+        mvmnt += TextSection::MOVEMENT_lineWise;
+        state.text.moveRel(mvmnt);
+        return;
+    }
+    if (keyboard[SDL_SCANCODE_RIGHT] || keyboard[SDL_SCANCODE_LEFT]) {
+        mvmnt += TextSection::MOVEMENT_forward * keyboard[SDL_SCANCODE_RIGHT];
+        state.text.moveRel(mvmnt);
+        return;
+    }
+    if (keyboard[SDL_SCANCODE_END] || keyboard[SDL_SCANCODE_HOME]) {
+        mvmnt += TextSection::MOVEMENT_forward * keyboard[SDL_SCANCODE_END];
+        mvmnt += TextSection::MOVEMENT_full;
+        state.text.moveRel(mvmnt);
+        return;
+    }
+    // if (keyboard[SDL_SCANCODE_RETURN]) {
+    //     state.text.write('\n');
+    //     return;
+    // }
 }
 
 void render(SDL_Renderer* renderer, TTF_Font* font) {
     SDL_CHK(SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255));
     SDL_CHK(SDL_RenderClear(renderer));
-
+    
     state.draw(renderer, font);
-
+    
     SDL_CHK(SDL_RenderPresent(renderer));
 }
 
@@ -152,7 +153,7 @@ TTF_Font*& defaultFont = FreeMono30;
 int main(int argc, char* args[]) {
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS));
     SDL_CHK(TTF_Init());
-
+    
     for (int logLevel = SDL_LOG_CATEGORY_CUSTOM; logLevel < CUSTOM_LOG_CATEGORY_LAST; logLevel++) {
         SDL_SetLogPriority(logLevel, SDL_LOG_PRIORITY_TRACE);
     }
@@ -163,7 +164,7 @@ int main(int argc, char* args[]) {
     SDL_Renderer* renderer = NULL;
     SDL_CHK(SDL_CreateWindowAndRenderer("text editor", 1600, 900, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_TRANSPARENT, &window, &renderer));
     SDL_StartTextInput(window);
-
+    
     FreeMono30 = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 30);
     if (!FreeMono30) {
         SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono in ptsize 30 doesn't exist\n");
