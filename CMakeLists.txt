@@ -42,6 +42,7 @@ add_executable(Editor
     src/editor.cc
     src/textSection.cc
     src/explorerSection.cc
+    src/text.cc
 )
 target_include_directories(Editor PRIVATE
     vendor/SDL_ttf/include/

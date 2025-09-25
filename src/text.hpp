@@ -1,22 +1,22 @@
 #pragma once
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <iterator>
 #include <util.hpp>
 #include <cassert>
 
-#define ROPE 1
+#define ROPE 0
 
 #if ROPE
+#include <algorithm>
+#include <iterator>
 
 struct Rope{
     // positive or zero means it is a leaf
     // negative means its absolute value is the sum of all sizes of the leafs to the left of it
-    ssize_t length;
+    ssize_t length = 0;
     static const ssize_t maxSize = 1024;
     union{
         struct {
@@ -53,6 +53,16 @@ struct Rope{
             pos++;
             return *this;
         }
+        Iterator& operator--() {
+            if (child) {
+                if (*child == std::begin(*parent->children.right)) {
+                    delete child;
+                    child = new Iterator(parent->children.left, ~parent->length);
+                }
+            }
+            pos--;
+            return *this;
+        }
         char operator*() const {
             if (parent->length < 0) {
                 return **child;
@@ -66,13 +76,11 @@ struct Rope{
             }
             if (child) {
                 if (*child == rhs) {
-                    printf("special case found\n");
                     return true;
                 }
             }
             if (rhs.child) {
                 if (*this == *rhs.child) {
-                    printf("special case found\n");
                     return true;
                 }
             }
@@ -96,23 +104,29 @@ struct Rope{
         }
         return {this, (size_t)length};
     }
+    Rope() {
+        assert(16 < maxSize);
+        string.content = (char*)malloc(16);
+        string.size = 16;
+    }
+    void print();
     void insertToChild(char c, ssize_t where) {
         if (where < -length) {
             children.left->insert(c, where);
+            length--;
         } else {
             children.right->insert(c, where+length);
         }
     }
     void insertToString(char c, ssize_t where) {
-        if ((size_t)length < string.size) {
-            string.content[where] = c;
-        } else {
+        if (string.size <= (size_t)length) {
+            assert(string.size == (size_t)length);
             size_t newSize = std::min((size_t)maxSize, string.size*2);
             string.content = (char*)realloc(string.content, newSize);
             string.size = string.content ? newSize : 0;
-            std::memmove(string.content+where+1, string.content+where, length-where);
-            string.content[where] = c;
         }
+        std::memmove(string.content+where+1, string.content+where, length-where);
+        string.content[where] = c;
         length++;
     }
     void insert(char c, ssize_t where) {
@@ -120,11 +134,14 @@ struct Rope{
             insertToChild(c, where);
             return;
         }
+        assert(where <= length);
         if (length < maxSize) {
             insertToString(c, where);
             return;
         }
         char tmp[maxSize];
+        printf("%ld %lu %lu\n", length, maxSize, where);
+        assert(length == maxSize && where <= maxSize);
         std::memcpy(tmp, string.content, length);
         delete string.content;
         children.left = new Rope();
@@ -136,7 +153,7 @@ struct Rope{
         for (ssize_t i = where; i < length; i++) {
             children.right->insertToString(tmp[i], 1+i-where);
         }
-        length = -length-1;
+        length = -length;
     }
 };
 
@@ -150,11 +167,12 @@ class Text{
     }
     void insert(char c);
     void insert(const char* string);
+    void print();
     // void moveRel();
     Rope::Iterator getView(int startLine, int lineCount) const;
     private:
-    char* buffer;
-    size_t bufferSize;
+    // char* buffer;
+    // size_t bufferSize;
     uint64_t cursor;
     Rope rope;
 };
