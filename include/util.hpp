@@ -12,7 +12,60 @@
 
 #define UNUSED(x) (void)(x)
 
+template <typename T>
 struct Array{
-    char* content;
+    T* content;
     size_t size;
+};
+
+template <typename T>
+struct List{
+    T* items = nullptr;
+    size_t size = 0;
+    size_t capacity = 0;
+    void push(T&& moveFrom) {
+        if (size == capacity) {
+            capacity = capacity * 2 + 1;
+            items = realloc(items, capacity);
+        }
+        items[size] = moveFrom;
+        size++;
+    }
+    T&& pop() {
+        if (!size) {
+            return;
+        }
+        size--;
+        return items[size];
+    }
+    void clear() {
+        free(items);
+        items = nullptr;
+        size = 0;
+        capacity = 0;
+    }
+    List& operator=(const List&) = delete;
+    List& operator=(List&& moveFrom) {
+        this->~List();
+        items = moveFrom.items;
+        size = moveFrom.size;
+        capacity = moveFrom.capacity;
+        moveFrom.items = nullptr;
+        moveFrom.size = 0;
+        moveFrom.capacity = 0;
+    }
+    List(const List& copyFrom) {
+        items = malloc(copyFrom.capacity);
+        capacity = copyFrom.capacity;
+        size = copyFrom.size;
+        for (size_t i = 0; i < size; i++) {
+            items[i] = copyFrom.items[i];
+        }
+    }
+    List() = default;
+    ~List() {
+        if (items) {
+            free(items);
+        }
+    }
 };

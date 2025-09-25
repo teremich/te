@@ -178,7 +178,7 @@ class Text{
 };
 
 #else 
-
+#include <utility>
 
 class Text{
     public:
@@ -206,16 +206,35 @@ class Text{
             return !(*this == rhs);
         }
     };
+    static_assert(std::is_trivially_copyable_v<Iterator>);
     Iterator begin() const {
         return {buffer, 0, bufferSize-fileSize, cursor};
     }
     Iterator end() const {
         return {buffer, fileSize, bufferSize-fileSize, cursor};
     }
-    void insert(char c, size_t where);
+    Text();
+    Text(const char* file);
+    ~Text();
+    void save(const char* file = NULL) const;
+    void load(const char* filename);
+    void print() const;
+    void insert(char c);
+    void insert(const char* str);
+    void del();
+    void backspace();
+    void left(bool wordWise = false);
+    void right(bool wordWise = false);
+    void up();
+    void down();
+    void home();
+    void end();
+    void beginning();
+    void ending();
     // void moveRel();
-    Iterator getView(int startLine, int lineCount) const;
+    std::pair<Iterator, Iterator> getView(int startLine, int lineCount) const;
     private:
+    const char* filename;
     char* buffer;
     size_t bufferSize;
     uint64_t cursor;
