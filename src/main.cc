@@ -1,3 +1,4 @@
+#include "SDL3/SDL_render.h"
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
@@ -79,31 +80,36 @@ bool handleEvents() {
 void update() {
     
 }
-
+SDL_Rect drawLine(const char* buffer, int len, const SDL_FRect& into, TTF_Font* font, SDL_Renderer* renderer);
 void render(SDL_Renderer* renderer, TTF_Font* font) {
-   UNUSED(renderer);
-   UNUSED(font);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    int width, height;
+    SDL_GetWindowSize(SDL_GetRenderWindow(renderer), &width, &height);
+    // editor.render(
+    //     renderer,
+    //     SDL_FRect{0, 0, (float)width, (float)height},
+    //     font
+    // );
+    drawLine("hello world!\n", 11, SDL_FRect{50, 50, 1000, 800}, font, renderer);
+    SDL_RenderPresent(renderer);
 }
 
 static TTF_Font* FreeMono30;
 TTF_Font*& defaultFont = FreeMono30;
 
 int main(int argc, char* argv[]) {
-
     Text t;
-
     t.insert("Hello, World!\nThis is a second line\n");
-
     List<Text> files;
     files.push(std::move(t));
-
     editor = Editor{
         std::move(files),
         0,
         0,
         "/home/emty/development/C++/te",
     };
-
+    
     UNUSED(argc);
     UNUSED(argv);
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS));
@@ -117,7 +123,7 @@ int main(int argc, char* argv[]) {
     
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
-    SDL_CHK(SDL_CreateWindowAndRenderer("text editor", 1600, 900, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_TRANSPARENT, &window, &renderer));
+    SDL_CHK(SDL_CreateWindowAndRenderer("text editor", 1600, 900, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_TRANSPARENT, &window, &renderer));
     SDL_StartTextInput(window);
     
     FreeMono30 = TTF_OpenFont("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 30);
@@ -128,13 +134,6 @@ int main(int argc, char* argv[]) {
     while (handleEvents()) {
         update();
         render(renderer, defaultFont);
-        int width, height;
-        SDL_GetWindowSize(window, &width, &height);
-        editor.render(
-            renderer,
-            SDL_FRect{0, 0, (float)width, (float)height},
-            defaultFont
-        );
     }
     TTF_CloseFont(FreeMono30);
     FreeMono30 = NULL;

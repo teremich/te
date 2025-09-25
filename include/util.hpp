@@ -26,14 +26,14 @@ struct List{
     void push(T&& moveFrom) {
         if (size == capacity) {
             capacity = capacity * 2 + 1;
-            items = realloc(items, capacity);
+            items = (T*) realloc(items, capacity*sizeof(T));
         }
         items[size] = moveFrom;
         size++;
     }
     T&& pop() {
         if (!size) {
-            return;
+            return {};
         }
         size--;
         return items[size];
@@ -53,14 +53,23 @@ struct List{
         moveFrom.items = nullptr;
         moveFrom.size = 0;
         moveFrom.capacity = 0;
+        return *this;
     }
     List(const List& copyFrom) {
-        items = malloc(copyFrom.capacity);
+        items = malloc(copyFrom.capacity * sizeof(T));
         capacity = copyFrom.capacity;
         size = copyFrom.size;
         for (size_t i = 0; i < size; i++) {
             items[i] = copyFrom.items[i];
         }
+    }
+    List(List&& moveFrom) {
+        items = moveFrom.items;
+        size = moveFrom.size;
+        capacity = moveFrom.capacity;
+        moveFrom.items = nullptr;
+        moveFrom.size = 0;
+        moveFrom.capacity = 0;
     }
     List() = default;
     ~List() {

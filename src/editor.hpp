@@ -3,6 +3,7 @@
 #include "text.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <cstdio>
 
 class Editor{
     List<Text> openFiles;
@@ -27,4 +28,7 @@ class Editor{
     ~Editor();
     void render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) const;
     void update();
+    void print() const {
+        printf("%s: (%zd / %zu)\n - %p\n", openFolder, openFile, openFiles.size, &openFiles.items[openFile]);
+    }
 };

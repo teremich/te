@@ -35,8 +35,8 @@ link_directories(
     vendor/SDL_ttf/build/debug/
 )
 include_directories(${SDL3_INCLUDE_FILES})
-add_compile_options(-march=native)
-
+add_compile_options(-march=native -fsanitize=address)
+add_link_options(-fsanitize=address)
 add_executable(Editor
     src/main.cc
     src/editor.cc

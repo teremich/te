@@ -60,6 +60,12 @@ Text::Text(const char* file) : filename(file), cursor(0) {
     fclose(f);
 }
 
+Text::~Text() {
+    if (buffer) {
+        free(buffer);
+    }
+}
+
 void Text::load(const char* file) {
     if (buffer) {
         free(buffer);
@@ -99,6 +105,19 @@ void Text::insert(char c) {
     }
     buffer[cursor++] = c;
     fileSize++;
+}
+
+void Text::insert(const char* str) {
+    const auto len = strlen(str);
+    while (bufferSize-fileSize < len) {
+        bufferSize += 1024;
+        const size_t gapSize = bufferSize-fileSize;
+        buffer = (char*) realloc(buffer, bufferSize);
+        std::memmove(buffer+cursor+gapSize, buffer+cursor, fileSize-cursor);
+    }
+    strncpy(buffer+cursor, str, len);
+    cursor += len;
+    fileSize += len;
 }
 
 void Text::backspace() {

@@ -197,7 +197,7 @@ class Text{
             return *this;
         }
         char operator*() const {
-            return *(base + gapSize * (pos >= cursorPos));
+            return *(base + pos + gapSize * (pos >= cursorPos));
         }
         inline bool operator==(const Iterator& rhs) const {
             return base == rhs.base && pos == rhs.pos;
