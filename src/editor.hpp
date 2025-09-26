@@ -13,6 +13,7 @@ class Editor{
         mutable ssize_t startLine;
         std::vector<ssize_t> newLineIndices;
         ssize_t numLinesBeforeCursor;
+        size_t inlineOffset;
     };
     List<Text> files;
     OpenFile currentFile;
@@ -20,18 +21,19 @@ class Editor{
     const char* folder = nullptr;
     public:
     Editor() = default;
-    Editor(List<Text>&& oFiles, const char* oFolder) {
-        files = std::move(oFiles);
-        currentFile = {files.size-1, 0, {}, -1};
-        folder = oFolder;
-        for (auto it = std::begin(files.items[currentFile.index]); it != std::end(files.items[currentFile.index]); ++it) {
-            if (*it == '\n') {
-                currentFile.newLineIndices.push_back(it.pos);
-            }
-        }
-    }
+    // Editor(List<Text>&& oFiles, const char* oFolder) {
+    //     files = std::move(oFiles);
+    //     currentFile = {files.size-1, 0, {}, -1, 0};
+    //     folder = oFolder;
+    //     for (auto it = std::begin(files.items[currentFile.index]); it != std::end(files.items[currentFile.index]); ++it) {
+    //         if (*it == '\n') {
+    //             currentFile.newLineIndices.push_back(it.pos);
+    //         }
+    //     }
+    // }
     Editor& operator=(Editor&& moveFrom) {
         files = std::move(moveFrom.files);
+        moveFrom.filenames.swap(filenames);
         currentFile = moveFrom.currentFile;
         folder = moveFrom.folder;
         return *this;
@@ -53,6 +55,6 @@ class Editor{
         files.items[currentFile.index].save(filename);
     }
     void print() const {
-        printf("%s: (%zd / %zu)\n - %p\n", folder, currentFile.index, files.size, &files.items[currentFile.index]);
+        printf("%s: (%zd / %zu)\n - %s\n", folder, currentFile.index, files.size, filenames[currentFile.index].c_str());
     }
 };

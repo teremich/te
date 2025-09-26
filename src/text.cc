@@ -227,29 +227,12 @@ void Text::del(bool wordWise) {
     } while (nonAscii || needMoreForWholeWord);
 }
 
-void Text::up(std::vector<ssize_t>& newLines) {
-    auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
-    if (pos == newLines.begin()) {
-        beginning();
-        return;
-    }
-    const size_t startOfThisLine = *(--pos) +1;
+void Text::up(std::vector<ssize_t>& newLines, size_t inLineOffset) {
+    // TODO: use parameter inLineOffset
+
     const size_t startOfLineAbove = pos == newLines.begin() ? 0 : *(--pos) +1;
     
-    size_t inLineOffset = 0;
-    for (size_t byte = startOfThisLine; byte < cursor; byte++) {
-        if (buffer[byte] & 0x80) {
-            inLineOffset += static_cast<bool>(buffer[byte] & 0x40);
-            // 11000011 counts as a character
-            // 10110110 does not
-            // together they are ö
-        } else {
-            inLineOffset++;
-        }
-    }
-    if (inLineOffset > startOfThisLine-startOfLineAbove) {
-        inLineOffset = startOfThisLine-startOfLineAbove-1;
-    }
+    
     const auto gapSize = bufferSize-fileSize;
     const auto newPos = startOfLineAbove+inLineOffset;
     std::memmove(
@@ -259,7 +242,8 @@ void Text::up(std::vector<ssize_t>& newLines) {
     cursor = newPos;
 }
 
-void Text::down(std::vector<ssize_t>& newLines) {
+void Text::down(std::vector<ssize_t>& newLines, size_t inLineOffset) {
+    // TODO: use parameter inLineOffset
     const auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
     if (pos == newLines.end()) {
         ending();

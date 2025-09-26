@@ -138,6 +138,8 @@ void Editor::update() {
     if (currentFile.numLinesBeforeCursor < 0 && end.pos == end.cursorPos) {
         currentFile.numLinesBeforeCursor = currentFile.newLineIndices.size();
     }
+    // TODO: fill currentFile.inlineOffset
+    UNUSED(currentFile.inlineOffset);
 }
 
 void Editor::write(const char* str) {
@@ -222,10 +224,10 @@ void Editor::write(SDL_KeyboardEvent key) {
             files.items[currentFile.index].insert('\n');
             return;
         case SDL_SCANCODE_UP:
-            files.items[currentFile.index].up(currentFile.newLineIndices);
+            files.items[currentFile.index].up(currentFile.newLineIndices, currentFile.inlineOffset);
             return;
         case SDL_SCANCODE_DOWN:
-            files.items[currentFile.index].down(currentFile.newLineIndices);
+            files.items[currentFile.index].down(currentFile.newLineIndices, currentFile.inlineOffset);
             return;
         case SDL_SCANCODE_LEFT:
             files.items[currentFile.index].left(ctrl);
@@ -288,7 +290,7 @@ void Editor::switchTo(size_t index) {
         return;
     }
     currentFile = {
-        index, 0, {}, 0
+        index, 0, {}, 0, 0
     };
 }
 
