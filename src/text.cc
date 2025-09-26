@@ -1,5 +1,7 @@
 #include "text.hpp"
+#include <algorithm>
 #include <cstdio>
+
 #if ROPE
 
 void Rope::print() {
@@ -41,23 +43,48 @@ Rope::Iterator Text::getView(int startLine, int lineCount) const {
 }
 #else
 
+const char* untitled = "Untitled";
+
 Text::Text() {
     bufferSize = 1024;
-    filename = NULL;
     buffer = (char*)malloc(bufferSize);
     fileSize = 0;
     cursor = 0;
 }
 
-Text::Text(const char* file) : filename(file), cursor(0) {
-    FILE* f = fopen(filename, "r");
+Text::Text(const char* file) : cursor(0) {
+    FILE* f = fopen(file, "r");
     fseek(f, 0, SEEK_END);
     fileSize = ftell(f);
     fseek(f, 0, SEEK_SET);
     bufferSize = fileSize + 1024;
     buffer = (char*) malloc(bufferSize);
-    assert(fread(buffer, fileSize, 1, f) == 1);
+    assert(fread(buffer+bufferSize-fileSize, fileSize, 1, f) == 1);
     fclose(f);
+}
+
+Text& Text::operator=(Text&& moveFrom) {
+    this->~Text();
+    buffer = moveFrom.buffer;
+    bufferSize = moveFrom.bufferSize;
+    fileSize = moveFrom.fileSize;
+    cursor = moveFrom.cursor;
+    moveFrom.buffer = nullptr;
+    moveFrom.cursor = 0;
+    moveFrom.fileSize = 0;
+    moveFrom.bufferSize = 0;
+    return *this;
+}
+
+Text::Text(Text&& moveFrom) :
+    buffer(moveFrom.buffer),
+    bufferSize(moveFrom.bufferSize),
+    cursor(moveFrom.cursor),
+    fileSize(moveFrom.fileSize) {
+    moveFrom.fileSize = 0;
+    moveFrom.bufferSize = 0;
+    moveFrom.buffer = nullptr;
+    moveFrom.cursor = 0;
 }
 
 Text::~Text() {
@@ -71,8 +98,7 @@ void Text::load(const char* file) {
         free(buffer);
         buffer = NULL;    
     }
-    filename = file;
-    FILE* f = fopen(filename, "r");
+    FILE* f = fopen(file, "r");
     fseek(f, 0, SEEK_END);
     fileSize = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -85,12 +111,10 @@ void Text::load(const char* file) {
 
 void Text::save(const char* file) const {
     if (!file) {
-        file = filename;
-    }
-    if (!file) {
         return;
     }
     FILE* f = fopen(file, "w+");
+    assert(f);
     fwrite(buffer, cursor, 1, f);
     fwrite(buffer+bufferSize-fileSize+cursor, fileSize-cursor, 1, f);
     fclose(f);
@@ -120,30 +144,61 @@ void Text::insert(const char* str) {
     fileSize += len;
 }
 
-void Text::backspace() {
+static bool isWordBreak(char from, char to) {
+    UNUSED(from);
+    UNUSED(to);
+    return true;
+}
+
+void Text::backspace(bool wordWise) {
     if (!cursor) {
         return;
     }
-    cursor--;
-    fileSize--;
+    bool needMoreForWholeWord, nonAscii;
+    do {
+        cursor--;
+        fileSize--;
+        if (!cursor) {
+            return;
+        }
+        const auto gapSize = bufferSize-fileSize;
+        needMoreForWholeWord = wordWise && !isWordBreak(buffer[cursor+gapSize-1], buffer[cursor-1]);
+        nonAscii = ((buffer[cursor+gapSize-1] & 0xC0) == 0x80) && (buffer[cursor-1] & 0x80); // checking buffer[cursor-1] is redundant but better be safe than sorry for deleting an ascii character that preceeded a 0b10… char
+    } while (nonAscii || needMoreForWholeWord);
 }
 
 void Text::left(bool wordWise) {
-    UNUSED(wordWise);
     if (!cursor) {
         return;
     }
-    --cursor;
-    buffer[cursor+bufferSize-fileSize] = buffer[cursor];
+    const auto gapSize = bufferSize-fileSize;
+    bool needMoreForWholeWord, nonAscii;
+    do {
+        --cursor;
+        buffer[cursor+gapSize] = buffer[cursor];
+        if (!cursor) {
+            return;
+        }
+        needMoreForWholeWord = wordWise && !isWordBreak(buffer[cursor], buffer[cursor-1]);
+        nonAscii = buffer[cursor-1] & 0x80 && ((buffer[cursor] & 0xC0)== 0x80); // checking buffer[cursor-1] is redundant but helps if the file is not utf8
+    } while(nonAscii || needMoreForWholeWord);
 }
 
 void Text::right(bool wordWise) {
-    UNUSED(wordWise);
     if (cursor == fileSize) {
         return;
     }
-    buffer[cursor] = buffer[cursor+bufferSize-fileSize];
-    ++cursor;
+    const auto gapSize = bufferSize-fileSize;
+    bool needMoreForWholeWord, nonAscii;
+    do {
+        buffer[cursor] = buffer[cursor+gapSize];
+        ++cursor;
+        if (cursor == fileSize) {
+            return;
+        }
+        needMoreForWholeWord = wordWise && !isWordBreak(buffer[cursor-1], buffer[cursor+gapSize]);
+        nonAscii = ((buffer[cursor+gapSize] & 0xC0) == 0x80) && (buffer[cursor-1] & 0x80); // checking buffer[cusor-1] is redundant
+    } while (nonAscii || needMoreForWholeWord);
 }
 
 void Text::ending() {
@@ -156,26 +211,109 @@ void Text::beginning() {
     cursor = 0;
 }
 
-void Text::del() {
-    if (cursor > --fileSize) {
-        cursor = fileSize;
+void Text::del(bool wordWise) {
+    if (cursor == fileSize) {
+        return;
     }
+    bool needMoreForWholeWord, nonAscii;
+    do {
+        --fileSize;
+        if (cursor == fileSize) {
+            return;
+        }
+        const auto gapSize = bufferSize-fileSize;
+        needMoreForWholeWord = wordWise && !isWordBreak(buffer[cursor+gapSize], buffer[cursor-1]);
+        nonAscii = (buffer[cursor+gapSize-1] & 0x80) && ((buffer[cursor+gapSize] & 0xC0) == 0x80);
+    } while (nonAscii || needMoreForWholeWord);
 }
 
-void Text::up() {
-    assert(false && "TODO!");
+void Text::up(std::vector<ssize_t>& newLines) {
+    auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
+    if (pos == newLines.begin()) {
+        beginning();
+        return;
+    }
+    const size_t startOfThisLine = *(--pos) +1;
+    const size_t startOfLineAbove = pos == newLines.begin() ? 0 : *(--pos) +1;
+    
+    size_t inLineOffset = 0;
+    for (size_t byte = startOfThisLine; byte < cursor; byte++) {
+        if (buffer[byte] & 0x80) {
+            inLineOffset += static_cast<bool>(buffer[byte] & 0x40);
+            // 11000011 counts as a character
+            // 10110110 does not
+            // together they are ö
+        } else {
+            inLineOffset++;
+        }
+    }
+    if (inLineOffset > startOfThisLine-startOfLineAbove) {
+        inLineOffset = startOfThisLine-startOfLineAbove-1;
+    }
+    const auto gapSize = bufferSize-fileSize;
+    const auto newPos = startOfLineAbove+inLineOffset;
+    std::memmove(
+        buffer+newPos+gapSize,
+        buffer+newPos,
+        cursor-newPos);
+    cursor = newPos;
 }
 
-void Text::down() {
-    assert(false && "TODO!");
+void Text::down(std::vector<ssize_t>& newLines) {
+    const auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
+    if (pos == newLines.end()) {
+        ending();
+        return;
+    }
+    const size_t startOfThisLine = pos == newLines.begin() ? 0 : *(pos-1) +1;
+    size_t inLineOffset = 0;
+    for (size_t byte = startOfThisLine; byte < cursor; byte++) {
+        if (buffer[byte] & 0x80) {
+            inLineOffset += static_cast<bool>(buffer[byte] & 0x40);
+            // 11000011 counts as a character
+            // 10110110 does not
+            // together they are ö
+        } else {
+            inLineOffset++;
+        }
+    }
+    const size_t startOfNextLine = *pos +1;
+    const size_t endOfNextLine = (pos+1) == newLines.end() ? fileSize : *(pos+1);
+    const size_t gapSize = bufferSize-fileSize;
+    size_t newPos = startOfNextLine;
+    for (size_t c = 0; c < inLineOffset && newPos < endOfNextLine; newPos++) {
+        if (buffer[startOfNextLine+gapSize+c] & 0x80) {
+            c += static_cast<bool>(buffer[startOfNextLine+gapSize+c] & 0x40);
+        } else {
+            c++;
+        }
+    }
+    std::memmove(buffer+cursor, buffer+gapSize+cursor, newPos-cursor);
+    cursor = newPos;
 }
 
-void Text::home() {
-    assert(false && "TODO!");
+void Text::home(std::vector<ssize_t>& newLines) {
+    const auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
+    const size_t startOfThisLine = pos == newLines.begin() ? -1 : *(pos-1);
+    const auto gapSize = bufferSize-fileSize;
+    const auto newPos = startOfThisLine+1;
+    std::memmove(
+        buffer+newPos+gapSize,
+        buffer+newPos,
+        cursor-newPos);
+    cursor = newPos;
 }
 
-void Text::ende() {
-    assert(false && "TODO!");
+void Text::ende(std::vector<ssize_t>& newLines) {
+    const auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
+    if (pos == newLines.end()) {
+        ending();
+        return;
+    }
+    const size_t startOfNextLine = *pos;
+    const size_t newPos = startOfNextLine;
+    std::memmove(buffer+cursor, buffer+bufferSize-fileSize+cursor, newPos-cursor);
+    cursor = newPos;
 }
 
 void Text::print() const {

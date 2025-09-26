@@ -8,41 +8,12 @@
 
 Editor editor;
 
-[[maybe_unused]] static void SDLCALL saveFileCallback(void *userdata, const char * const *filelist, int filter) {
-    UNUSED(filter);
-    if (!filelist) {
-        return;
-    }
-    if (!filelist[0]) {
-        return;
-    }
-    if (!*filelist[0]) {
-        return;
-    }
-    UNUSED(userdata);
-    (void)(filelist[0]);
-}
-
-[[maybe_unused]] static void SDLCALL openFileCallback(void* userdata, const char * const *filelist, int filter) {
-    UNUSED(filter);
-    if (!filelist) {
-        return;
-    }
-    if (!filelist[0]) {
-        return;
-    }
-    if (!*filelist[0]) {
-        return;
-    }
-    UNUSED(userdata);
-    UNUSED(filelist[0]);
-}
-
 void keyDown(SDL_KeyboardEvent key) {
     editor.write(key);
 }
 
 bool handleEvents() {
+    Timer t("Handle Input");
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch(event.type) {
@@ -95,21 +66,11 @@ static TTF_Font* FreeMono30;
 TTF_Font*& defaultFont = FreeMono30;
 
 int main(int argc, char* argv[]) {
-    Text t;
-    t.insert("Hello, World!\nThis is a second line\n");
-    t.beginning();
-    List<Text> files;
-    files.push(std::move(t));
-    editor = Editor{
-        std::move(files),
-        "/home/emty/development/C++/te",
-    };
-    
     UNUSED(argc);
     UNUSED(argv);
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS));
     SDL_CHK(TTF_Init());
-    
+    // I can even add comments :D
     for (int logLevel = SDL_LOG_CATEGORY_CUSTOM; logLevel < CUSTOM_LOG_CATEGORY_LAST; logLevel++) {
         SDL_SetLogPriority(logLevel, SDL_LOG_PRIORITY_TRACE);
     }
@@ -126,12 +87,15 @@ int main(int argc, char* argv[]) {
         SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono in ptsize 30 doesn't exist\n");
         exit(1);
     }
+    editor.open("src/main.cc");
     while (handleEvents()) {
+        Timer t("=================================\nframe");
         update();
         render(renderer, defaultFont);
     }
     TTF_CloseFont(FreeMono30);
     FreeMono30 = NULL;
+    
     TTF_Quit();
     SDL_Quit();
     return 0;

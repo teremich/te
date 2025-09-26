@@ -1,10 +1,16 @@
 #include "editor.hpp"
+#include "logging.hpp"
+#include "util.hpp"
 
 SDL_FPoint drawLine(const char* buffer, int len, const SDL_FRect& into, TTF_Font* font, SDL_Renderer* renderer) {
     if (!len) {
         return {0, (float)TTF_GetFontHeight(font)};
     }
+    if (len == -1) {
+        len = 0;
+    }
     SDL_Surface* renderedStrip = TTF_RenderText_Blended(font, buffer, len, SDL_Color{255, 255, 255, 255});
+    SDL_CHK(!!renderedStrip);
     // SDL_CHK(SDL_GetSurfaceClipRect(renderedStrip, &srcrect));
     // if (srcrect.w > into.w) {
     //     srcrect.w = into.w;
@@ -14,18 +20,20 @@ SDL_FPoint drawLine(const char* buffer, int len, const SDL_FRect& into, TTF_Font
     // }
     // SDL_CHK(SDL_SetSurfaceClipRect(renderedStrip, &srcrect));
     auto stripTexture = SDL_CreateTextureFromSurface(renderer, renderedStrip);
+    SDL_CHK(!!stripTexture);
     float width, height;
-    SDL_GetTextureSize(stripTexture, &width, &height);
+    SDL_CHK(SDL_GetTextureSize(stripTexture, &width, &height));
     SDL_FRect srcrect = {0, 0, width, height};
     SDL_FRect dstrect{into.x, into.y, srcrect.w, srcrect.h};
     SDL_CHK(SDL_RenderTexture(renderer, stripTexture, &srcrect, &dstrect));
     SDL_DestroySurface(renderedStrip);
+    SDL_DestroyTexture(stripTexture);
     return {srcrect.w, srcrect.h};
 }
 
-void drawCursor(const SDL_FRect& into, SDL_Renderer* renderer) {
+void drawCursor(const SDL_FRect& into, SDL_Renderer* renderer, TTF_Font* font) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_FRect cursor = {into.x, into.y, 2, 30};
+    SDL_FRect cursor = {into.x, into.y, 2, static_cast<float>(TTF_GetFontHeight(font))};
     SDL_RenderFillRect(renderer, &cursor);
 }
 
@@ -39,7 +47,7 @@ static void renderText(SDL_Renderer* renderer, SDL_FRect into, Text::Iterator& b
             into.x += drawn.x;
             into.w -= drawn.x;
             i = 0;
-            drawCursor(into, renderer);
+            drawCursor(into, renderer, font);
         }
         if (begin == end) {
             drawLine(buffer, i, into, font, renderer);
@@ -55,7 +63,21 @@ static void renderText(SDL_Renderer* renderer, SDL_FRect into, Text::Iterator& b
             i = 0;
             continue;
         }
-        if (i == SDL_arraysize(buffer)) {
+        if (*begin == '\t') {
+            // const char spaces[4]{' ', ' ', ' ', ' '};
+            SDL_FPoint drawn = drawLine(buffer, i, into, font, renderer);
+            into.x += drawn.x;
+            into.w -= drawn.x;
+            i = 0;
+            *(uint32_t*)buffer = 0x20202020;
+            drawn = drawLine(buffer, 4, into, font, renderer);
+            into.x += drawn.x;
+            into.w -= drawn.x;
+            ++begin;
+            continue;
+        }
+        bool closeToEndAndIteratorDoesNotPointIntoAUTF8Byte = i > static_cast<int>(SDL_arraysize(buffer)-4) && ((*begin & 0xC0) != 0x80);
+        if (closeToEndAndIteratorDoesNotPointIntoAUTF8Byte || i == SDL_arraysize(buffer)) {
             SDL_FPoint drawn = drawLine(buffer, i, into, font, renderer);
             into.x += drawn.x;
             into.w -= drawn.x;
@@ -69,89 +91,213 @@ static void renderText(SDL_Renderer* renderer, SDL_FRect into, Text::Iterator& b
 void Editor::render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) const {
     SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
     SDL_RenderFillRect(renderer, &into);
-    ssize_t maxLines = into.h / TTF_GetFontHeight(font);
-    if (openFile >= 0) {
-        auto [begin, end] = openFiles.items[openFile].getView(startLine, maxLines);
-        renderText(renderer, {into.x+60, into.y+10, into.w-70, into.h-20}, begin, end, font);
+    SDL_FRect canvas{into.x+30, into.y+10, into.w-50, into.h-20};
+    if (currentFile.index < files.size) {
+        Timer t("renderText");
+        const char* filename = filenames[currentFile.index].c_str();
+        if (!*filename) {
+            filename = "Untitled";
+        }
+        const auto drawn = drawLine(filename, -1, canvas, font, renderer);
+        // MOVE DOWN BY THE DRAWN AMOUNT
+        canvas.y += drawn.y;
+        canvas.h -= drawn.y;
+        // MOVE DOWN ADDITIONAL 50 PX
+        canvas.y += 50;
+        canvas.h -= 50;
+        // MOVE RIGHT 20 PX
+        canvas.x += 20;
+        canvas.w -= 20;
+        ssize_t maxLines = canvas.h / TTF_GetFontHeight(font);
+        if (maxLines <= currentFile.numLinesBeforeCursor-currentFile.startLine) {
+            currentFile.startLine = currentFile.numLinesBeforeCursor-maxLines+1;
+        } else if (currentFile.startLine > currentFile.numLinesBeforeCursor) {
+            currentFile.startLine = currentFile.numLinesBeforeCursor;
+        }
+        auto [begin, end] = files.items[currentFile.index].getView(currentFile.startLine, maxLines);
+        renderText(renderer, canvas, begin, end, font);
     }
 }
 
 void Editor::update() {
-    if (openFile < 0) {
+    if (currentFile.index >= files.size) {
         return;
     }
-    // auto keyboard = SDL_GetKeyboardState(NULL);
-    // bool ctrl = SDL_GetModState() & SDL_KMOD_CTRL;
-    // if (keyboard[SDL_SCANCODE_UP]) {
-    //     openFiles.items[openFile].up();
-    //     return;
-    // }
-    // if (keyboard[SDL_SCANCODE_DOWN]) {
-    //     openFiles.items[openFile].down();
-    //     return;
-    // }
-    // if (keyboard[SDL_SCANCODE_LEFT]) {
-    //     openFiles.items[openFile].left(ctrl);
-    //     return;
-    // }
-    // if (keyboard[SDL_SCANCODE_RIGHT]) {
-    //     openFiles.items[openFile].right(ctrl);
-    //     return;
-    // }
-    // if (keyboard[SDL_SCANCODE_HOME]) {
-    //     ctrl ? openFiles.items[openFile].beginning() : openFiles.items[openFile].home();
-    //     return;
-    // }
-    // if (keyboard[SDL_SCANCODE_END]) {
-    //     ctrl ? openFiles.items[openFile].ending() : openFiles.items[openFile].ende();
-    //     return;
-    // }
+    Timer t("Editor::update");
+    currentFile.newLineIndices.clear();
+    const auto end = std::end(files.items[currentFile.index]);
+    currentFile.numLinesBeforeCursor = -1;
+    for (auto it = std::begin(files.items[currentFile.index]); it != end; ++it) {
+        if (it.pos == it.cursorPos) {
+            currentFile.numLinesBeforeCursor = currentFile.newLineIndices.size();
+        }
+        if (*it == '\n') {
+            currentFile.newLineIndices.push_back(it.pos);
+        }
+    }
+    if (currentFile.numLinesBeforeCursor < 0 && end.pos == end.cursorPos) {
+        currentFile.numLinesBeforeCursor = currentFile.newLineIndices.size();
+    }
 }
 
 void Editor::write(const char* str) {
-    if (openFile < 0) {
+    if (currentFile.index >= files.size) {
         return;
     }
-    openFiles.items[openFile].insert(str);
+    files.items[currentFile.index].insert(str);
+}
+
+
+[[maybe_unused]] static void SDLCALL saveFileCallback(void *userdata, const char * const *filelist, int filter) {
+    UNUSED(filter);
+    if (!filelist) {
+        return;
+    }
+    if (!filelist[0]) {
+        return;
+    }
+    if (!*filelist[0]) {
+        return;
+    }
+    Editor* editor = reinterpret_cast<Editor*>(userdata);
+    editor->saveAs(filelist[0]);
+}
+
+static void SDLCALL openFileCallback(void* userdata, const char * const *filelist, int filter) {
+    UNUSED(filter);
+    if (!filelist) {
+        // no file list
+        return;
+    }
+    for (const char* const* file = filelist; *file; file++) {
+        const char* filename = *file;
+        if (!*filename) {
+            // filename in filelist has 0 size
+            continue;
+        }
+        Editor* editor = reinterpret_cast<Editor*>(userdata);
+        editor->open(filename);
+    }
+}
+
+static_assert(std::is_same<decltype(&openFileCallback), SDL_DialogFileCallback>::value);
+
+void Editor::close(size_t index) {
+    if (index >= files.size) {
+        return;
+    }
+    files.items[index] = files.pop();
+    filenames.at(index) = *filenames.rbegin();
+    filenames.pop_back();
 }
 
 void Editor::write(SDL_KeyboardEvent key) {
-    if (openFile < 0) {
+    SDL_Event e{
+        .key = key
+    };
+    const bool lctrl = key.mod & SDL_KMOD_LCTRL;
+    if (key.key == SDLK_O && lctrl) {
+        // LCTRL + O
+        SDL_ShowOpenFileDialog(openFileCallback, this, SDL_GetWindowFromEvent(&e), NULL, 0, folder, true);
+        return;
+    }
+    if (key.key == SDLK_N && lctrl) {
+        // LCTRL + N
+        currentFile.index = files.push(Text());
+        filenames.push_back({});
+        return;
+    }
+    if (currentFile.index >= files.size) {
         return;
     }
     const bool ctrl = key.mod & SDL_KMOD_CTRL;
     switch(key.scancode) {
         case SDL_SCANCODE_DELETE:
-            openFiles.items[openFile].del();
-            break;
+            files.items[currentFile.index].del();
+            return;
         case SDL_SCANCODE_BACKSPACE:
-            openFiles.items[openFile].backspace();
-            break;
+            files.items[currentFile.index].backspace();
+            return;
         case SDL_SCANCODE_RETURN:
-            openFiles.items[openFile].insert('\n');
-            break;
+            files.items[currentFile.index].insert('\n');
+            return;
         case SDL_SCANCODE_UP:
-            openFiles.items[openFile].up();
-            break;
+            files.items[currentFile.index].up(currentFile.newLineIndices);
+            return;
         case SDL_SCANCODE_DOWN:
-            openFiles.items[openFile].down();
-            break;
+            files.items[currentFile.index].down(currentFile.newLineIndices);
+            return;
         case SDL_SCANCODE_LEFT:
-            openFiles.items[openFile].left(ctrl);
-            break;
+            files.items[currentFile.index].left(ctrl);
+            return;
         case SDL_SCANCODE_RIGHT:
-            openFiles.items[openFile].right(ctrl);
-            break;
+            files.items[currentFile.index].right(ctrl);
+            return;
         case SDL_SCANCODE_HOME:
-            ctrl ? openFiles.items[openFile].beginning() : openFiles.items[openFile].home();
-            break;
+            ctrl ? files.items[currentFile.index].beginning() : files.items[currentFile.index].home(currentFile.newLineIndices);
+            return;
         case SDL_SCANCODE_END:
-            ctrl ? openFiles.items[openFile].ending() : openFiles.items[openFile].ende();
-            break;
+            ctrl ? files.items[currentFile.index].ending() : files.items[currentFile.index].ende(currentFile.newLineIndices);
+            return;
+        case SDL_SCANCODE_TAB:
+            static constexpr SDL_Keymod KMOD_TOGGLE_KEYS = SDL_KMOD_CAPS | SDL_KMOD_NUM | SDL_KMOD_SCROLL;
+            if (!(key.mod & ~KMOD_TOGGLE_KEYS)) {
+                files.items[currentFile.index].insert('\t');
+                return;
+            } break;
         default:
             // SDL_LogCritical(CUSTOM_LOG_CATEGORY_INPUT, "didn't handle special key %u\n", key);
-            return;
+            break;
     }
+    if (key.key == SDLK_S && lctrl) {
+        if (key.mod & SDL_KMOD_SHIFT) {
+            // LCTRL + SHIFT + S
+            // TODO: implement saveFileCallback
+            SDL_ShowSaveFileDialog(saveFileCallback, this, SDL_GetWindowFromEvent(&e), NULL, 0, folder);
+            return;
+        }
+        // LCTRL + S
+        files.items[currentFile.index].save(filenames[currentFile.index].c_str());
+        return;
+    }
+    if (key.key == SDLK_W && lctrl) {
+        close(currentFile.index);
+        if (currentFile.index >= files.size) {
+            currentFile.index = files.size-1;
+        }
+        return;
+    }
+    SDL_LogDebug(CUSTOM_LOG_CATEGORY_INPUT, "key.key: %u\n", key.key);
+    if (key.key == SDLK_TAB && lctrl) {
+        if (!files.size) {
+            return;
+        }
+        if (key.mod & SDL_KMOD_SHIFT) {
+            // CTRL + SHIFT + TAB
+            switchTo((currentFile.index - 1 + files.size) % files.size);
+            return;
+        }
+        // CTRL + TAB
+        switchTo((currentFile.index + 1) % files.size);
+        return;
+    }
+}
+
+void Editor::switchTo(size_t index) {
+    if (index >= files.size) {
+        return;
+    }
+    currentFile = {
+        index, 0, {}, 0
+    };
+}
+
+size_t Editor::open(const char* relativeFilePath) {
+    filenames.push_back(relativeFilePath);
+    currentFile.index = files.push(Text(relativeFilePath));
+    assert(currentFile.index == files.size-1);
+    assert(currentFile.index == filenames.size()-1);
+    return currentFile.index;
 }
 
 Editor::~Editor() = default;

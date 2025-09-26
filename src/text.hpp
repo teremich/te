@@ -180,6 +180,8 @@ class Text{
 #else 
 #include <utility>
 
+extern const char* untitled;
+
 class Text{
     public:
     class Iterator{
@@ -215,30 +217,31 @@ class Text{
     }
     Text();
     Text(const char* file);
+    Text& operator=(Text&&);
+    Text(Text&&);
     ~Text();
-    void save(const char* file = NULL) const;
+    void save(const char* filename) const;
     void load(const char* filename);
     void print() const;
     void insert(char c);
     void insert(const char* str);
-    void del();
-    void backspace();
+    void del(bool wordWise = false);
+    void backspace(bool wordWise = false);
     void left(bool wordWise = false);
     void right(bool wordWise = false);
-    void up();
-    void down();
-    void home();
-    void ende();
+    void up(std::vector<ssize_t>& newLines);
+    void down(std::vector<ssize_t>& newLines);
+    void home(std::vector<ssize_t>& newLines);
+    void ende(std::vector<ssize_t>& newLines);
     void beginning();
     void ending();
     // void moveRel();
     std::pair<Iterator, Iterator> getView(int startLine, int lineCount) const;
     private:
-    const char* filename;
-    char* buffer;
-    size_t bufferSize;
-    uint64_t cursor;
-    size_t fileSize;
+    char* buffer = nullptr;
+    size_t bufferSize = 0;
+    uint64_t cursor = 0;
+    size_t fileSize = 0;
 };
 
 #endif

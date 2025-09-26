@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdlib>
+#include <chrono>
+#include <cstring>
+#include <cassert>
 
 // #ifdef DEBUG
 #ifdef SDL_CHK
@@ -11,6 +14,30 @@
 // #endif // DEBUG
 
 #define UNUSED(x) (void)(x)
+
+template <class Resolution = std::chrono::duration<float, std::milli>>
+requires requires(Resolution r) {
+    {std::chrono::duration{r}} -> std::same_as<Resolution>;
+}
+struct Timer{
+    const char* name = nullptr;
+    const std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    using resolution = Resolution;
+    Timer() = default;
+    explicit Timer(const char* name) : name(name) {}
+    ~Timer() {
+        const auto end = std::chrono::high_resolution_clock::now();
+        const auto delta = end-start;
+        printf(
+            "%s: %f\n",
+            name,
+            delta.count()
+            * std::chrono::high_resolution_clock::period::num * static_cast<Resolution::rep>(Resolution::period::den)
+            / std::chrono::high_resolution_clock::period::den
+            / Resolution::period::num
+        );
+    }
+};
 
 template <typename T>
 struct Array{
@@ -23,20 +50,19 @@ struct List{
     T* items = nullptr;
     size_t size = 0;
     size_t capacity = 0;
-    void push(T&& moveFrom) {
+    size_t push(T&& moveFrom) {
         if (size == capacity) {
             capacity = capacity * 2 + 1;
             items = (T*) realloc(items, capacity*sizeof(T));
         }
-        items[size] = moveFrom;
-        size++;
+        new(&items[size]) T();
+        items[size] = std::move(moveFrom);
+        return size++;
     }
     T&& pop() {
-        if (!size) {
-            return {};
-        }
+        assert(size);
         size--;
-        return items[size];
+        return std::move(items[size]);
     }
     void clear() {
         free(items);
@@ -74,6 +100,9 @@ struct List{
     List() = default;
     ~List() {
         if (items) {
+            for (size_t i = 0; i < size; i++) {
+                items[i].~T();
+            }
             free(items);
         }
     }
