@@ -12,10 +12,10 @@ class Editor{
     const char* openFolder = nullptr;
     public:
     Editor() = default;
-    Editor(List<Text>&& oFiles, ssize_t oFile, ssize_t sLine, const char* oFolder) {
+    Editor(List<Text>&& oFiles, const char* oFolder) {
         openFiles = std::move(oFiles);
-        openFile = oFile;
-        startLine = sLine;
+        openFile = openFiles.size-1;
+        startLine = 0;
         openFolder = oFolder;
     }
     Editor& operator=(Editor&& moveFrom) {
@@ -26,8 +26,14 @@ class Editor{
         return *this;
     }
     ~Editor();
+    enum SpecialKey{
+        DEL, BACKSPACE,
+        LAST
+    };
     void render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) const;
     void update();
+    void write(const char* str);
+    void write(SDL_KeyboardEvent key);
     void print() const {
         printf("%s: (%zd / %zu)\n - %p\n", openFolder, openFile, openFiles.size, &openFiles.items[openFile]);
     }

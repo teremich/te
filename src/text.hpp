@@ -184,13 +184,13 @@ class Text{
     public:
     class Iterator{
         const char* base = 0;
-        size_t pos = 0;
         size_t gapSize = 0;
-        size_t cursorPos = 0;
         public:
+        size_t pos = 0;
+        size_t cursorPos = 0;
         Iterator() = default;
         Iterator(char* buffer, size_t pos, size_t gap, size_t cursor)
-         : base(buffer), pos(pos), gapSize(gap), cursorPos(cursor)
+         : base(buffer), gapSize(gap), pos(pos), cursorPos(cursor)
         {}
         Iterator& operator++() {
             pos++;
@@ -228,7 +228,7 @@ class Text{
     void up();
     void down();
     void home();
-    void end();
+    void ende();
     void beginning();
     void ending();
     // void moveRel();

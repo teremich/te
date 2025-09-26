@@ -1,4 +1,3 @@
-#include "SDL3/SDL_render.h"
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <cstdio>
@@ -40,7 +39,7 @@ Editor editor;
 }
 
 void keyDown(SDL_KeyboardEvent key) {
-    static_cast<void>(key);
+    editor.write(key);
 }
 
 bool handleEvents() {
@@ -59,9 +58,7 @@ bool handleEvents() {
                 break;
             // case SDL_EVENT_KEY_UP:
             case SDL_EVENT_TEXT_INPUT:
-                for (const char* c = event.text.text; *c != 0; c++) {
-                    UNUSED(*c);
-                }
+                editor.write(event.text.text);
                 break;
             // case SDL_EVENT_WINDOW_RESIZED:
             // case SDL_EVENT_WINDOW_RESTORED:
@@ -78,20 +75,19 @@ bool handleEvents() {
 }
 
 void update() {
-    
+    editor.update();
 }
-SDL_Rect drawLine(const char* buffer, int len, const SDL_FRect& into, TTF_Font* font, SDL_Renderer* renderer);
+
 void render(SDL_Renderer* renderer, TTF_Font* font) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     int width, height;
     SDL_GetWindowSize(SDL_GetRenderWindow(renderer), &width, &height);
-    // editor.render(
-    //     renderer,
-    //     SDL_FRect{0, 0, (float)width, (float)height},
-    //     font
-    // );
-    drawLine("hello world!\n", 11, SDL_FRect{50, 50, 1000, 800}, font, renderer);
+    editor.render(
+        renderer,
+        SDL_FRect{0, 0, (float)width, (float)height},
+        font
+    );
     SDL_RenderPresent(renderer);
 }
 
@@ -101,12 +97,11 @@ TTF_Font*& defaultFont = FreeMono30;
 int main(int argc, char* argv[]) {
     Text t;
     t.insert("Hello, World!\nThis is a second line\n");
+    t.beginning();
     List<Text> files;
     files.push(std::move(t));
     editor = Editor{
         std::move(files),
-        0,
-        0,
         "/home/emty/development/C++/te",
     };
     

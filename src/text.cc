@@ -162,6 +162,22 @@ void Text::del() {
     }
 }
 
+void Text::up() {
+    assert(false && "TODO!");
+}
+
+void Text::down() {
+    assert(false && "TODO!");
+}
+
+void Text::home() {
+    assert(false && "TODO!");
+}
+
+void Text::ende() {
+    assert(false && "TODO!");
+}
+
 void Text::print() const {
     for (size_t i = 0; i < cursor; i++) {
         printf("%c", buffer[i]);
