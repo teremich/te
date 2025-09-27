@@ -9,18 +9,20 @@
 
 class Editor{
     struct OpenFile{
-        size_t index;
-        mutable ssize_t startLine;
-        std::vector<ssize_t> newLineIndices;
-        ssize_t numLinesBeforeCursor;
-        size_t inlineOffset;
+        size_t index{0};
+        mutable ssize_t startLine{0};
+        std::vector<ssize_t> newLineIndices{};
+        ssize_t numLinesBeforeCursor{0};
+        ssize_t inlineOffset{-1};
     };
-    List<Text> files;
+    List<Text> files{};
     OpenFile currentFile;
-    std::vector<std::string> filenames;
-    const char* folder = nullptr;
+    std::vector<std::string> filenames{};
+    const char* folder{nullptr};
     public:
-    Editor() = default;
+    Editor() {
+        updateInlineOffset();
+    };
     // Editor(List<Text>&& oFiles, const char* oFolder) {
     //     files = std::move(oFiles);
     //     currentFile = {files.size-1, 0, {}, -1, 0};
@@ -50,6 +52,7 @@ class Editor{
     void update();
     void write(const char* str);
     void write(SDL_KeyboardEvent key);
+    void updateInlineOffset();
     void saveAs(const char* filename) {
         filenames.at(currentFile.index) = filename;
         files.items[currentFile.index].save(filename);

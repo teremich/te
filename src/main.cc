@@ -13,7 +13,6 @@ void keyDown(SDL_KeyboardEvent key) {
 }
 
 bool handleEvents() {
-    Timer t("Handle Input");
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch(event.type) {

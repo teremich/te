@@ -1,6 +1,8 @@
 #include "editor.hpp"
+#include "SDL3/SDL_log.h"
 #include "logging.hpp"
 #include "util.hpp"
+#include <algorithm>
 
 SDL_FPoint drawLine(const char* buffer, int len, const SDL_FRect& into, TTF_Font* font, SDL_Renderer* renderer) {
     if (!len) {
@@ -39,6 +41,7 @@ void drawCursor(const SDL_FRect& into, SDL_Renderer* renderer, TTF_Font* font) {
 
 static void renderText(SDL_Renderer* renderer, SDL_FRect into, Text::Iterator& begin, const Text::Iterator& end, TTF_Font* font) {
     static char buffer[16];
+    size_t drawnChars = 0;
     int i = 0;
     SDL_FPoint orig{into.x, into.w};
     while (into.h > 0) {
@@ -61,6 +64,7 @@ static void renderText(SDL_Renderer* renderer, SDL_FRect into, Text::Iterator& b
             into.x = orig.x;
             into.w = orig.y;
             i = 0;
+            drawnChars = 0;
             continue;
         }
         if (*begin == '\t') {
@@ -70,7 +74,8 @@ static void renderText(SDL_Renderer* renderer, SDL_FRect into, Text::Iterator& b
             into.w -= drawn.x;
             i = 0;
             *(uint32_t*)buffer = 0x20202020;
-            drawn = drawLine(buffer, 4, into, font, renderer);
+            drawn = drawLine(buffer, 4-(drawnChars%4), into, font, renderer);
+            drawnChars += 4-(drawnChars%4);
             into.x += drawn.x;
             into.w -= drawn.x;
             ++begin;
@@ -84,6 +89,11 @@ static void renderText(SDL_Renderer* renderer, SDL_FRect into, Text::Iterator& b
             i = 0;
         }
         buffer[i++] = *begin;
+        if (*begin & 0x80) {
+            drawnChars += static_cast<bool>(*begin & 0x40);
+        } else {
+            drawnChars++;
+        }
         ++begin;
     }
 }
@@ -93,7 +103,6 @@ void Editor::render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) cons
     SDL_RenderFillRect(renderer, &into);
     SDL_FRect canvas{into.x+30, into.y+10, into.w-50, into.h-20};
     if (currentFile.index < files.size) {
-        Timer t("renderText");
         const char* filename = filenames[currentFile.index].c_str();
         if (!*filename) {
             filename = "Untitled";
@@ -115,6 +124,7 @@ void Editor::render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) cons
             currentFile.startLine = currentFile.numLinesBeforeCursor;
         }
         auto [begin, end] = files.items[currentFile.index].getView(currentFile.startLine, maxLines);
+        // TODO: render line numbers
         renderText(renderer, canvas, begin, end, font);
     }
 }
@@ -123,7 +133,6 @@ void Editor::update() {
     if (currentFile.index >= files.size) {
         return;
     }
-    Timer t("Editor::update");
     currentFile.newLineIndices.clear();
     const auto end = std::end(files.items[currentFile.index]);
     currentFile.numLinesBeforeCursor = -1;
@@ -138,8 +147,6 @@ void Editor::update() {
     if (currentFile.numLinesBeforeCursor < 0 && end.pos == end.cursorPos) {
         currentFile.numLinesBeforeCursor = currentFile.newLineIndices.size();
     }
-    // TODO: fill currentFile.inlineOffset
-    UNUSED(currentFile.inlineOffset);
 }
 
 void Editor::write(const char* str) {
@@ -150,15 +157,18 @@ void Editor::write(const char* str) {
 }
 
 
-[[maybe_unused]] static void SDLCALL saveFileCallback(void *userdata, const char * const *filelist, int filter) {
+static void SDLCALL saveFileCallback(void *userdata, const char * const *filelist, int filter) {
     UNUSED(filter);
     if (!filelist) {
+        SDL_LogWarn(CUSTOM_LOG_CATEGORY_EDITOR, "Error while saving file: %s\n", SDL_GetError());
         return;
     }
     if (!filelist[0]) {
+        // cancelled the dialog
         return;
     }
     if (!*filelist[0]) {
+        // empty filename
         return;
     }
     Editor* editor = reinterpret_cast<Editor*>(userdata);
@@ -168,7 +178,7 @@ void Editor::write(const char* str) {
 static void SDLCALL openFileCallback(void* userdata, const char * const *filelist, int filter) {
     UNUSED(filter);
     if (!filelist) {
-        // no file list
+        SDL_LogWarn(CUSTOM_LOG_CATEGORY_EDITOR, "Error while opening file(s): %s\n", SDL_GetError());
         return;
     }
     for (const char* const* file = filelist; *file; file++) {
@@ -191,6 +201,27 @@ void Editor::close(size_t index) {
     files.items[index] = files.pop();
     filenames.at(index) = *filenames.rbegin();
     filenames.pop_back();
+}
+
+void Editor::updateInlineOffset() {
+    if (currentFile.index >= files.size) {
+        return;
+    }
+    update();
+    const auto cursor = files.items[currentFile.index].begin().cursorPos;
+    const auto endOfThisLine = std::lower_bound(currentFile.newLineIndices.begin(), currentFile.newLineIndices.end(), cursor);
+    const auto startOfThisLine = endOfThisLine == currentFile.newLineIndices.begin() ? 0 : *(endOfThisLine-1)+1;
+    currentFile.inlineOffset = 0;
+    for (size_t c = startOfThisLine; c < cursor; c++) {
+        const char currentChar = *(files.items[currentFile.index].begin()+c);
+        if (currentChar & 0x80) {
+            currentFile.inlineOffset += static_cast<bool>(currentChar & 0x40);
+        } else if (currentChar == '\t') {
+            currentFile.inlineOffset += 4;
+        } else {
+            currentFile.inlineOffset++;
+        }
+    }
 }
 
 void Editor::write(SDL_KeyboardEvent key) {
@@ -219,9 +250,11 @@ void Editor::write(SDL_KeyboardEvent key) {
             return;
         case SDL_SCANCODE_BACKSPACE:
             files.items[currentFile.index].backspace();
+            currentFile.inlineOffset--;
             return;
         case SDL_SCANCODE_RETURN:
             files.items[currentFile.index].insert('\n');
+            currentFile.inlineOffset = 0;
             return;
         case SDL_SCANCODE_UP:
             files.items[currentFile.index].up(currentFile.newLineIndices, currentFile.inlineOffset);
@@ -231,15 +264,23 @@ void Editor::write(SDL_KeyboardEvent key) {
             return;
         case SDL_SCANCODE_LEFT:
             files.items[currentFile.index].left(ctrl);
+            updateInlineOffset();
             return;
         case SDL_SCANCODE_RIGHT:
             files.items[currentFile.index].right(ctrl);
+            updateInlineOffset();
             return;
         case SDL_SCANCODE_HOME:
-            ctrl ? files.items[currentFile.index].beginning() : files.items[currentFile.index].home(currentFile.newLineIndices);
+            if (ctrl) {
+                files.items[currentFile.index].beginning();
+                currentFile.inlineOffset = 0;
+            } else {
+                currentFile.inlineOffset = files.items[currentFile.index].home(currentFile.newLineIndices);
+            }
             return;
         case SDL_SCANCODE_END:
             ctrl ? files.items[currentFile.index].ending() : files.items[currentFile.index].ende(currentFile.newLineIndices);
+            updateInlineOffset();
             return;
         case SDL_SCANCODE_TAB:
             static constexpr SDL_Keymod KMOD_TOGGLE_KEYS = SDL_KMOD_CAPS | SDL_KMOD_NUM | SDL_KMOD_SCROLL;
@@ -254,7 +295,6 @@ void Editor::write(SDL_KeyboardEvent key) {
     if (key.key == SDLK_S && lctrl) {
         if (key.mod & SDL_KMOD_SHIFT) {
             // LCTRL + SHIFT + S
-            // TODO: implement saveFileCallback
             SDL_ShowSaveFileDialog(saveFileCallback, this, SDL_GetWindowFromEvent(&e), NULL, 0, folder);
             return;
         }
@@ -290,13 +330,20 @@ void Editor::switchTo(size_t index) {
         return;
     }
     currentFile = {
-        index, 0, {}, 0, 0
+        index,
+        0,
+        {},
+        0,
+        -1
     };
+    updateInlineOffset();
 }
 
 size_t Editor::open(const char* relativeFilePath) {
     filenames.push_back(relativeFilePath);
     currentFile.index = files.push(Text(relativeFilePath));
+    // currentFile.inlineOffset = -1;
+    updateInlineOffset();
     assert(currentFile.index == files.size-1);
     assert(currentFile.index == filenames.size()-1);
     return currentFile.index;

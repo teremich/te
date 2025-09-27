@@ -110,7 +110,7 @@ void Text::load(const char* file) {
 }
 
 void Text::save(const char* file) const {
-    if (!file) {
+    if (!file || !*file) {
         return;
     }
     FILE* f = fopen(file, "w+");
@@ -227,14 +227,36 @@ void Text::del(bool wordWise) {
     } while (nonAscii || needMoreForWholeWord);
 }
 
-void Text::up(std::vector<ssize_t>& newLines, size_t inLineOffset) {
-    // TODO: use parameter inLineOffset
-
-    const size_t startOfLineAbove = pos == newLines.begin() ? 0 : *(--pos) +1;
-    
-    
+void Text::up(std::vector<ssize_t>& newLines, ssize_t inLineOffset) {
+    const auto endOfThisLine = std::lower_bound(newLines.begin(), newLines.end(), cursor);
+    if (endOfThisLine == newLines.begin()) {
+        return beginning();
+    }
+    const auto startOfThisLine = endOfThisLine-1;
+    if (inLineOffset < 0) {
+        // inLineOffset = cursor-*(startOfThisLine)+1;
+        for (size_t c = *(startOfThisLine)+1; c < cursor; c++) {
+            if (buffer[c] & 0x80) {
+                inLineOffset += static_cast<bool>(buffer[c] & 0x40);
+            } else if (buffer[c] == '\t') {
+                inLineOffset += 4;
+            } else {
+                inLineOffset++;
+            }
+        }
+    }
+    const size_t startOfLineAbove = startOfThisLine == newLines.begin() ? 0 : *(startOfThisLine-1) +1;
     const auto gapSize = bufferSize-fileSize;
-    const auto newPos = startOfLineAbove+inLineOffset;
+    auto newPos = startOfLineAbove;
+    for (ssize_t c = 0; c < inLineOffset && static_cast<ssize_t>(newPos) < *startOfThisLine; newPos++) {
+        if (buffer[newPos+gapSize] & 0x80) {
+            c += static_cast<bool>(buffer[newPos+gapSize] & 0x40);
+        } else if (buffer[newPos+gapSize] == '\t') {
+            c += 4;
+        } else {
+            c++;
+        }
+    }
     std::memmove(
         buffer+newPos+gapSize,
         buffer+newPos,
@@ -242,32 +264,34 @@ void Text::up(std::vector<ssize_t>& newLines, size_t inLineOffset) {
     cursor = newPos;
 }
 
-void Text::down(std::vector<ssize_t>& newLines, size_t inLineOffset) {
-    // TODO: use parameter inLineOffset
-    const auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
-    if (pos == newLines.end()) {
-        ending();
-        return;
+void Text::down(std::vector<ssize_t>& newLines, ssize_t inLineOffset) {
+    const auto endOfThisLine = std::lower_bound(newLines.begin(), newLines.end(), cursor);
+    if (endOfThisLine == newLines.end()) {
+        return ending();
     }
-    const size_t startOfThisLine = pos == newLines.begin() ? 0 : *(pos-1) +1;
-    size_t inLineOffset = 0;
-    for (size_t byte = startOfThisLine; byte < cursor; byte++) {
-        if (buffer[byte] & 0x80) {
-            inLineOffset += static_cast<bool>(buffer[byte] & 0x40);
-            // 11000011 counts as a character
-            // 10110110 does not
-            // together they are ö
-        } else {
-            inLineOffset++;
+    const auto startOfThisLine = endOfThisLine == newLines.begin() ? 0 : *(endOfThisLine-1) +1;
+    if (inLineOffset < 0) {
+        // inLineOffset = cursor-*(startOfThisLine)+1;
+        for (size_t c = startOfThisLine; c < cursor; c++) {
+            if (buffer[c] & 0x80) {
+                inLineOffset += static_cast<bool>(buffer[c] & 0x40);
+            } else if (buffer[c] == '\t') {
+                inLineOffset += 4;
+            } else {
+                inLineOffset++;
+            }
         }
     }
-    const size_t startOfNextLine = *pos +1;
-    const size_t endOfNextLine = (pos+1) == newLines.end() ? fileSize : *(pos+1);
-    const size_t gapSize = bufferSize-fileSize;
-    size_t newPos = startOfNextLine;
-    for (size_t c = 0; c < inLineOffset && newPos < endOfNextLine; newPos++) {
-        if (buffer[startOfNextLine+gapSize+c] & 0x80) {
-            c += static_cast<bool>(buffer[startOfNextLine+gapSize+c] & 0x40);
+    const auto startOfNextLinePosition = *endOfThisLine +1;
+    const std::vector<ssize_t>::iterator endOfNextLine = endOfThisLine+1;
+    const ssize_t endOfNextLinePosition = endOfNextLine == newLines.end() ? fileSize : *endOfNextLine;
+    const auto gapSize = bufferSize-fileSize;
+    ssize_t newPos = startOfNextLinePosition;
+    for (ssize_t c = 0; c < inLineOffset && newPos < endOfNextLinePosition; newPos++) {
+        if (buffer[newPos+gapSize] & 0x80) {
+            c += static_cast<bool>(buffer[newPos+gapSize] & 0x40);
+        } else if (buffer[newPos+gapSize] == '\t') {
+            c += 4;
         } else {
             c++;
         }
@@ -276,16 +300,36 @@ void Text::down(std::vector<ssize_t>& newLines, size_t inLineOffset) {
     cursor = newPos;
 }
 
-void Text::home(std::vector<ssize_t>& newLines) {
-    const auto pos = std::lower_bound(newLines.begin(), newLines.end(), cursor);
-    const size_t startOfThisLine = pos == newLines.begin() ? -1 : *(pos-1);
+bool isWhiteSpace(char c) {
+    //   horizonal tab| line feed  |vertical tab| form feed |carriage return| space
+    return 0x09 == c || 0x0A == c || 0x0B == c || 0x0C == c || 0x0D == c || 0x20 == c;
+}
+
+ssize_t Text::home(std::vector<ssize_t>& newLines) {
+    const auto endOfThisLine = std::lower_bound(newLines.begin(), newLines.end(), cursor);
     const auto gapSize = bufferSize-fileSize;
-    const auto newPos = startOfThisLine+1;
+    const size_t startOfThisLine = endOfThisLine == newLines.begin() ? 0 : *(endOfThisLine-1)+1;
+    size_t endOfWhiteSpace;
+    for (endOfWhiteSpace = startOfThisLine; endOfWhiteSpace < static_cast<size_t>(*endOfThisLine); endOfWhiteSpace++) {
+        if (!isWhiteSpace(buffer[endOfWhiteSpace])) {
+            break;
+        }
+    }
+
+    if (cursor == startOfThisLine && endOfWhiteSpace > cursor) {
+        // cursor moves right
+        std::memmove(buffer+cursor, buffer+cursor+gapSize, endOfWhiteSpace-cursor);
+        cursor = endOfWhiteSpace;
+        return endOfWhiteSpace-startOfThisLine;
+    }
+    size_t newPos = endOfWhiteSpace < cursor ? endOfWhiteSpace : startOfThisLine;
+    // cursor moves left
     std::memmove(
         buffer+newPos+gapSize,
         buffer+newPos,
         cursor-newPos);
     cursor = newPos;
+    return cursor - startOfThisLine;
 }
 
 void Text::ende(std::vector<ssize_t>& newLines) {

@@ -40,7 +40,6 @@ add_link_options(-fsanitize=address)
 add_executable(Editor
     src/main.cc
     src/editor.cc
-    src/textSection.cc
     src/explorerSection.cc
     src/text.cc
 )

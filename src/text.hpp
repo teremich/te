@@ -198,6 +198,11 @@ class Text{
             pos++;
             return *this;
         }
+        // warning: do not add more than pos-fileSize, it will break the iterator for loop
+        Iterator& operator+(size_t offset) {
+            pos += offset;
+            return *this;
+        }
         char operator*() const {
             return *(base + pos + gapSize * (pos >= cursorPos));
         }
@@ -229,9 +234,9 @@ class Text{
     void backspace(bool wordWise = false);
     void left(bool wordWise = false);
     void right(bool wordWise = false);
-    void up(std::vector<ssize_t>& newLines);
-    void down(std::vector<ssize_t>& newLines);
-    void home(std::vector<ssize_t>& newLines);
+    void up(std::vector<ssize_t>& newLines, ssize_t inLineOffset);
+    void down(std::vector<ssize_t>& newLines, ssize_t inLineOffset);
+    ssize_t home(std::vector<ssize_t>& newLines);
     void ende(std::vector<ssize_t>& newLines);
     void beginning();
     void ending();
