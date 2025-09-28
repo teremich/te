@@ -20,9 +20,12 @@ bool handleEvents() {
                 return false;
             // case SDL_EVENT_MOUSE_MOTION:
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                UNUSED(event.button);
+                editor.moveTo(event.button);
                 break;
             // case SDL_EVENT_MOUSE_BUTTON_UP:
+            case SDL_EVENT_MOUSE_WHEEL:
+                editor.scroll(event.wheel);
+                break;
             case SDL_EVENT_KEY_DOWN:
                 keyDown(event.key);
                 break;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SDL3/SDL_events.h"
 #include "text.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -53,6 +54,9 @@ class Editor{
     void write(const char* str);
     void write(SDL_KeyboardEvent key);
     void updateInlineOffset();
+    void invalidateStartLine() const;
+    void moveTo(SDL_MouseButtonEvent button);
+    void scroll(SDL_MouseWheelEvent wheel) const;
     void saveAs(const char* filename) {
         filenames.at(currentFile.index) = filename;
         files.items[currentFile.index].save(filename);

@@ -147,6 +147,7 @@ void Text::insert(const char* str) {
 static bool isWordBreak(char from, char to) {
     UNUSED(from);
     UNUSED(to);
+    // TODO: implement
     return true;
 }
 
@@ -351,25 +352,6 @@ void Text::print() const {
     for (size_t i = 0; i < fileSize-cursor; i++) {
         printf("%c", (buffer+bufferSize-fileSize+cursor)[i]);
     }
-}
-
-std::pair<Text::Iterator, Text::Iterator> Text::getView(int startLine, int lineCount) const {  
-    std::pair<Text::Iterator, Text::Iterator> ret;
-    auto it = begin();
-    int currentLine = 0;
-    for (; it != end() && currentLine < startLine; ++it) {
-        if (*it == '\n') {
-            currentLine++;
-        }
-    }
-    ret.first = it;
-    for (; it != end() && currentLine < startLine+lineCount; ++it) {
-        if (*it == '\n') {
-            currentLine++;
-        }
-    }
-    ret.second = it;
-    return ret;
 }
 
 #endif
