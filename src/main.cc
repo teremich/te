@@ -20,7 +20,7 @@ bool handleEvents() {
                 return false;
             // case SDL_EVENT_MOUSE_MOTION:
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                editor.moveTo(event.button);
+                editor.buttonDown(event.button);
                 break;
             // case SDL_EVENT_MOUSE_BUTTON_UP:
             case SDL_EVENT_MOUSE_WHEEL:
@@ -51,21 +51,20 @@ void update() {
     editor.update();
 }
 
-void render(SDL_Renderer* renderer, TTF_Font* font) {
+void render(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     int width, height;
     SDL_GetWindowSize(SDL_GetRenderWindow(renderer), &width, &height);
     editor.render(
         renderer,
-        SDL_FRect{0, 0, (float)width, (float)height},
-        font
+        SDL_FRect{0, 0, (float)width, (float)height}
     );
     SDL_RenderPresent(renderer);
 }
 
 static TTF_Font* FreeMono30;
-TTF_Font*& defaultFont = FreeMono30;
+TTF_Font*& selectedFont = FreeMono30;
 
 int main(int argc, char* argv[]) {
     UNUSED(argc);
@@ -89,11 +88,12 @@ int main(int argc, char* argv[]) {
         SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono in ptsize 30 doesn't exist\n");
         exit(1);
     }
+    editor = Editor(selectedFont);
     editor.open("src/main.cc");
     while (handleEvents()) {
         Timer t("=================================\nframe");
         update();
-        render(renderer, defaultFont);
+        render(renderer);
     }
     TTF_CloseFont(FreeMono30);
     FreeMono30 = NULL;

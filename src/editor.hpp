@@ -1,6 +1,5 @@
 #pragma once
 
-#include "SDL3/SDL_events.h"
 #include "text.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -20,8 +19,10 @@ class Editor{
     OpenFile currentFile;
     std::vector<std::string> filenames{};
     const char* folder{nullptr};
+    TTF_Font* font{nullptr};
     public:
-    Editor() {
+    Editor() = default;
+    Editor(TTF_Font* font) : font(font) {
         updateInlineOffset();
     };
     // Editor(List<Text>&& oFiles, const char* oFolder) {
@@ -49,13 +50,14 @@ class Editor{
     size_t open(const char* relativeFilePath);
     void close(size_t index);
     void switchTo(size_t index);
-    void render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) const;
+    void render(SDL_Renderer* renderer, SDL_FRect into) const;
     void update();
     void write(const char* str);
     void write(SDL_KeyboardEvent key);
     void updateInlineOffset();
     void invalidateStartLine() const;
-    void moveTo(SDL_MouseButtonEvent button);
+    void moveToMousePos();
+    void buttonDown(const SDL_MouseButtonEvent& button);
     void scroll(SDL_MouseWheelEvent wheel) const;
     void saveAs(const char* filename) {
         filenames.at(currentFile.index) = filename;

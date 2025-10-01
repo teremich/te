@@ -1,4 +1,5 @@
 #include "editor.hpp"
+#include "SDL3_ttf/SDL_ttf.h"
 #include "logging.hpp"
 #include "util.hpp"
 #include <algorithm>
@@ -137,7 +138,7 @@ static void renderText(SDL_Renderer* renderer, TTF_Font* font, SDL_FRect& into, 
     }
 }
 
-void Editor::render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) const {
+void Editor::render(SDL_Renderer* renderer, SDL_FRect into) const {
     SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
     SDL_RenderFillRect(renderer, &into);
     SDL_FRect canvas{into.x+30, into.y+10, into.w-50, into.h-20};
@@ -177,6 +178,9 @@ void Editor::render(SDL_Renderer* renderer, SDL_FRect into, TTF_Font* font) cons
 }
 
 void Editor::update() {
+    if ((SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LEFT) && true) {
+        moveToMousePos();
+    }
     if (currentFile.index >= files.size) {
         return;
     }
@@ -392,25 +396,60 @@ void Editor::write(SDL_KeyboardEvent key) {
     // TODO: Copy, Cut, Paste
 }
 
-void Editor::moveTo(SDL_MouseButtonEvent button) {
+void Editor::moveToMousePos() {
+    float x, y;
+    SDL_GetMouseState(&x, &y);
+    // TODO: add clicking into the text field
+    // TODO: get real font height
+    const int fontHeight = TTF_GetFontHeight(font);
+    const int fontWidth = 18;
+    // TODO: get real editor offset
+    const int editorOffsetX = 30+20+110;
+    const int editorOffsetY = 10+30+50;
+    // [X] calculate line, column from Y and X
+    float relativeX = x - editorOffsetX;
+    if (relativeX < 0) {
+        relativeX = 0;
+    }
+    relativeX += fontWidth-3;
+    float relativeY = y - editorOffsetY;
+    if (relativeY < 0) {
+        relativeY = 0;
+    }
+    size_t line = relativeY / fontHeight;
+    const int column = std::max<float>(relativeX / fontWidth + 0.5, 0);
+    // [X] add startLine to line
+    line += currentFile.startLine;
+    // [X] find new line by looking up line in currentFile.newLineIndices
+    ssize_t newLineIndex = -1;
+    if (line > currentFile.newLineIndices.size()) {
+        line = currentFile.newLineIndices.size();
+    } else if (line > 0) {
+        newLineIndex = currentFile.newLineIndices[line-1];
+    }
+    // [ ] find new column, keeping in mind that going right one char doesnt mean the cursor moves 1 byte
+    ssize_t end = (line == currentFile.newLineIndices.size()) ? files.items[currentFile.index].end().pos-1 : currentFile.newLineIndices[line];
+    SDL_LogDebug(CUSTOM_LOG_CATEGORY_INPUT, "%zd:%d\n", newLineIndex, column);
+    if (newLineIndex+column >= end) {
+        newLineIndex = end-column;
+    }
+    // [X] move the cursor to the new position
+    files.items[currentFile.index].moveTo(newLineIndex+column);
+}
+
+void Editor::buttonDown(const SDL_MouseButtonEvent& button) {
     if (button.type == SDL_EVENT_MOUSE_BUTTON_UP) {
         return;
     }
     if (button.button == SDL_BUTTON_LEFT) {
         switch((button.clicks-1) % 3) {
-            case 0:
-                // TODO: add clicking into the text field
-                // [ ] calculate X, Y of mouse button
-                // [ ] calculate line, column from Y and X
-                // [ ] add startLine to line
-                // [ ] find new position by looking up line in currentFile.newLineIndices
-                // [ ] move the cursor to the new position
-                break;
-            case 1:
-                // TODO: select word
-                break;
             case 2:
                 // TODO: select line
+            case 1:
+                // TODO: select word
+            case 0:
+                moveToMousePos();
+                // setSelectStart();
                 break;
         }
     }

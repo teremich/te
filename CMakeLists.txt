@@ -28,8 +28,6 @@ option(SDL_STATIC ON)
 add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
 
 option(BUILD_SHARED_LIBS OFF)
-# option(SDLTTF_FREETYPE_VENDORED ON)
-# option(SDLTTF_HARFBUZZ_VENDORED ON)
 add_subdirectory(vendor/SDL_ttf EXCLUDE_FROM_ALL)
 link_directories(
     vendor/SDL_ttf/build/debug/

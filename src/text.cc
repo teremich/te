@@ -151,6 +151,22 @@ static bool isWordBreak(char from, char to) {
     return true;
 }
 
+size_t Text::getFileSize() const {
+    return fileSize;
+}
+
+void Text::moveTo(ssize_t new_position) {
+    if (new_position < 0) {
+        return;
+    }
+    if (static_cast<size_t>(new_position) < cursor) {
+        std::memmove(buffer+bufferSize-fileSize+new_position, buffer+new_position, cursor-new_position);
+    } else {
+        std::memmove(buffer+cursor, buffer+cursor+bufferSize-fileSize, new_position-cursor);
+    }
+    cursor = new_position;
+}
+
 void Text::backspace(bool wordWise) {
     if (!cursor) {
         return;

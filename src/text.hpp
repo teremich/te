@@ -238,6 +238,8 @@ class Text{
     void down(std::vector<ssize_t>& newLines, ssize_t inLineOffset);
     ssize_t home(std::vector<ssize_t>& newLines);
     void ende(std::vector<ssize_t>& newLines);
+    size_t getFileSize() const;
+    void moveTo(ssize_t new_position);
     void beginning();
     void ending();
     // void moveRel();
