@@ -40,6 +40,7 @@ class Editor{
         moveFrom.filenames.swap(filenames);
         currentFile = moveFrom.currentFile;
         folder = moveFrom.folder;
+        font = moveFrom.font;
         return *this;
     }
     ~Editor();

@@ -198,6 +198,10 @@ class Text{
             pos++;
             return *this;
         }
+        Iterator& operator--() {
+            pos--;
+            return *this;
+        }
         // warning: do not add more than pos-fileSize, it will break the iterator for loop
         Iterator& operator+(size_t offset) {
             pos += offset;

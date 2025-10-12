@@ -1,4 +1,7 @@
+
+
 #include "editor.hpp"
+#include "SDL3/SDL_keyboard.h"
 #include "SDL3_ttf/SDL_ttf.h"
 #include "logging.hpp"
 #include "util.hpp"
@@ -306,6 +309,10 @@ void Editor::write(SDL_KeyboardEvent key) {
         return;
     }
     const bool ctrl = key.mod & SDL_KMOD_CTRL;
+    const bool* keyboard = SDL_GetKeyboardState(NULL);
+    if (!keyboard[key.scancode]) {
+        return;
+    }
     switch(key.scancode) {
         case SDL_SCANCODE_DELETE:
             files.items[currentFile.index].del(ctrl);
@@ -315,11 +322,38 @@ void Editor::write(SDL_KeyboardEvent key) {
             currentFile.inlineOffset--;
             return;
         case SDL_SCANCODE_RETURN:
-            files.items[currentFile.index].insert('\n');
-            // TODO: add whitespace from current line and add whitespace to text behind cursor
-            currentFile.inlineOffset = 0;
-            currentFile.startLine |= S64SIGN_BIT;
-            return;
+            {
+                auto& file = files.items[currentFile.index];
+                file.insert('\n');
+                currentFile.inlineOffset = 0;
+                currentFile.startLine |= S64SIGN_BIT;
+                // TODO: add whitespace from current line and add whitespace to text behind cursor
+                const auto next = file.begin() + file.begin().cursorPos;
+                if (next == file.end() || *next == '\n') {
+                    size_t lastLineBegin = 0;
+                    if (currentFile.numLinesBeforeCursor > 0) {
+                        lastLineBegin = currentFile.newLineIndices[currentFile.numLinesBeforeCursor-1] + 1;
+                    }
+                    auto startOfWhitespace = file.begin() + lastLineBegin;
+                    int numSpaces = 0;
+                    int numTabs = 0;
+                    while (*startOfWhitespace == ' ') {
+                        ++numSpaces;
+                        ++startOfWhitespace;
+                    }
+                    while (*startOfWhitespace == '\t') {
+                        ++numTabs;
+                        ++startOfWhitespace;
+                    }
+                    for (int i = 0; i < numSpaces; i++) {
+                        file.insert(' ');
+                    }
+                    for (int i = 0; i < numTabs; i++) {
+                        file.insert('\t');
+                    }
+                }
+                return;
+            }
         case SDL_SCANCODE_UP:
             files.items[currentFile.index].up(currentFile.newLineIndices, currentFile.inlineOffset);
             currentFile.startLine |= S64SIGN_BIT;
@@ -355,7 +389,7 @@ void Editor::write(SDL_KeyboardEvent key) {
         case SDL_SCANCODE_TAB:
             static constexpr SDL_Keymod KMOD_TOGGLE_KEYS = SDL_KMOD_CAPS | SDL_KMOD_NUM | SDL_KMOD_SCROLL;
             if (!(key.mod & ~KMOD_TOGGLE_KEYS)) {
-                files.items[currentFile.index].insert('\t');
+                files.items[currentFile.index].insert("    ");
                 currentFile.startLine |= S64SIGN_BIT;
                 return;
             } break;
@@ -393,48 +427,68 @@ void Editor::write(SDL_KeyboardEvent key) {
         switchTo((currentFile.index + 1) % files.size);
         return;
     }
-    // TODO: Copy, Cut, Paste
+    if (key.key == SDLK_C && lctrl) {
+        // TODO: Copy
+        return;
+    }
+    if (key.key == SDLK_V && lctrl) {
+        // TODO: Paste
+        return;
+    }
+    if (key.key == SDLK_X && lctrl) {
+        // TODO: Cut
+        return;
+    }
 }
 
 void Editor::moveToMousePos() {
     float x, y;
     SDL_GetMouseState(&x, &y);
-    // TODO: add clicking into the text field
-    // TODO: get real font height
     const int fontHeight = TTF_GetFontHeight(font);
+    // TODO: get real font width
     const int fontWidth = 18;
-    // TODO: get real editor offset
     const int editorOffsetX = 30+20+110;
     const int editorOffsetY = 10+30+50;
-    // [X] calculate line, column from Y and X
     float relativeX = x - editorOffsetX;
-    if (relativeX < 0) {
-        relativeX = 0;
+    if (relativeX < -fontWidth) {
+        relativeX = -fontWidth;
     }
-    relativeX += fontWidth-3;
+    relativeX += fontWidth / 2.;
     float relativeY = y - editorOffsetY;
     if (relativeY < 0) {
         relativeY = 0;
     }
-    size_t line = relativeY / fontHeight;
-    const int column = std::max<float>(relativeX / fontWidth + 0.5, 0);
-    // [X] add startLine to line
+    ssize_t line = relativeY / fontHeight;
+    int column = std::max<float>(relativeX / fontWidth, 0);
     line += currentFile.startLine;
-    // [X] find new line by looking up line in currentFile.newLineIndices
     ssize_t newLineIndex = -1;
-    if (line > currentFile.newLineIndices.size()) {
+    auto& file = files.items[currentFile.index];
+    if (line > static_cast<ssize_t>(currentFile.newLineIndices.size())) {
         line = currentFile.newLineIndices.size();
+        newLineIndex = file.end().pos;
     } else if (line > 0) {
         newLineIndex = currentFile.newLineIndices[line-1];
     }
-    // [ ] find new column, keeping in mind that going right one char doesnt mean the cursor moves 1 byte
-    ssize_t end = (line == currentFile.newLineIndices.size()) ? files.items[currentFile.index].end().pos-1 : currentFile.newLineIndices[line];
-    SDL_LogDebug(CUSTOM_LOG_CATEGORY_INPUT, "%zd:%d\n", newLineIndex, column);
-    if (newLineIndex+column >= end) {
-        newLineIndex = end-column;
+    const ssize_t end = (
+        line == static_cast<ssize_t>(currentFile.newLineIndices.size())
+    ) ? file.end().pos : currentFile.newLineIndices[line];
+    if (column > end) {
+        column = end;
+    }
+    // [X] find new column, keeping in mind that going right one char doesn't mean the cursor moves 1 byte
+    ssize_t newPos = std::min(end-column, newLineIndex)+1;
+    const auto e = file.end();
+    const ssize_t b = newPos;
+    auto it = file.begin();
+    for (it = it + newPos; newPos-b < column && it != e && it.pos < static_cast<size_t>(end); ++it) {
+        if (*it & 0x80) {
+            newPos += static_cast<bool>(*it & 0x40);
+        } else {
+            newPos++;
+        }
     }
     // [X] move the cursor to the new position
-    files.items[currentFile.index].moveTo(newLineIndex+column);
+    file.moveTo(it.pos);
 }
 
 void Editor::buttonDown(const SDL_MouseButtonEvent& button) {

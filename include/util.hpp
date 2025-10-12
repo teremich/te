@@ -54,6 +54,7 @@ struct List{
         if (size == capacity) {
             capacity = capacity * 2 + 1;
             items = (T*) realloc(items, capacity*sizeof(T));
+            // std::memset(items+size, 0, sizeof(T)*(capacity-size));
         }
         new(&items[size]) T();
         items[size] = std::move(moveFrom);
@@ -107,3 +108,8 @@ struct List{
         }
     }
 };
+
+static inline bool isWhiteSpace(char c) {
+    //   horizonal tab| line feed  |vertical tab| form feed |carriage return| space
+    return 0x09 == c || 0x0A == c || 0x0B == c || 0x0C == c || 0x0D == c || 0x20 == c;
+}

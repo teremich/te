@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     editor = Editor(selectedFont);
     editor.open("src/main.cc");
     while (handleEvents()) {
-        Timer t("=================================\nframe");
+        // Timer t("=================================\nframe");
         update();
         render(renderer);
     }

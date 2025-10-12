@@ -155,16 +155,30 @@ size_t Text::getFileSize() const {
     return fileSize;
 }
 
-void Text::moveTo(ssize_t new_position) {
-    if (new_position < 0) {
+void Text::moveTo(ssize_t newPos) {
+    if (newPos < 0) {
         return;
     }
-    if (static_cast<size_t>(new_position) < cursor) {
-        std::memmove(buffer+bufferSize-fileSize+new_position, buffer+new_position, cursor-new_position);
+    if (static_cast<size_t>(newPos) < cursor) {
+        if (newPos) {
+            if ((buffer[newPos-1] & 0x80) && (buffer[newPos] & 0xC0) == 0x80) {
+                moveTo(newPos+1);
+                return;
+            }
+        }
+        std::memmove(buffer+bufferSize-fileSize+newPos, buffer+newPos, cursor-newPos);
     } else {
-        std::memmove(buffer+cursor, buffer+cursor+bufferSize-fileSize, new_position-cursor);
+        if (
+            newPos &&
+            (buffer[newPos-1 + (bufferSize-fileSize)*(static_cast<size_t>(newPos) > cursor)] & 0x80)
+            && (buffer[newPos + (bufferSize-fileSize)] & 0xC0) == 0x80
+        ) {
+            moveTo(newPos+1);
+            return;
+        }
+        std::memmove(buffer+cursor, buffer+cursor+bufferSize-fileSize, newPos-cursor);
     }
-    cursor = new_position;
+    cursor = newPos;
 }
 
 void Text::backspace(bool wordWise) {
@@ -315,11 +329,6 @@ void Text::down(std::vector<ssize_t>& newLines, ssize_t inLineOffset) {
     }
     std::memmove(buffer+cursor, buffer+gapSize+cursor, newPos-cursor);
     cursor = newPos;
-}
-
-bool isWhiteSpace(char c) {
-    //   horizonal tab| line feed  |vertical tab| form feed |carriage return| space
-    return 0x09 == c || 0x0A == c || 0x0B == c || 0x0C == c || 0x0D == c || 0x20 == c;
 }
 
 ssize_t Text::home(std::vector<ssize_t>& newLines) {

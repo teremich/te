@@ -33,6 +33,10 @@ link_directories(
     vendor/SDL_ttf/build/debug/
 )
 include_directories(${SDL3_INCLUDE_FILES})
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 add_compile_options(-march=native -fsanitize=address -fvisibility=hidden)
 add_link_options(-fsanitize=address -flto -fvisibility=hidden)
 add_executable(Editor
