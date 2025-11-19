@@ -5,8 +5,10 @@
 #include <editor.hpp>
 #include <util.hpp>
 #include <logging.hpp>
+#include <options.hpp>
 
 Editor editor;
+Options options;
 
 void keyDown(SDL_KeyboardEvent key) {
     editor.write(key);
@@ -64,14 +66,16 @@ void render(SDL_Renderer* renderer) {
 }
 
 static TTF_Font* FreeMono30;
-TTF_Font*& selectedFont = FreeMono30;
+TTF_Font* &selectedFont = FreeMono30;
 
 int main(int argc, char* argv[]) {
-    UNUSED(argc);
-    UNUSED(argv);
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--underscore")) {
+            options.underscore_is_word_break = true;
+        }
+    }
     SDL_CHK(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS));
     SDL_CHK(TTF_Init());
-    // I can even add comments :D
     for (int logLevel = SDL_LOG_CATEGORY_CUSTOM; logLevel < CUSTOM_LOG_CATEGORY_LAST; logLevel++) {
         SDL_SetLogPriority(logLevel, SDL_LOG_PRIORITY_TRACE);
     }
@@ -88,6 +92,7 @@ int main(int argc, char* argv[]) {
         SDL_LogCritical(SDL_LOG_CATEGORY_ERROR, "freemono in ptsize 30 doesn't exist\n");
         exit(1);
     }
+
     editor = Editor(selectedFont);
     editor.open("src/main.cc");
     while (handleEvents()) {

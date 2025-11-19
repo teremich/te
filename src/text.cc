@@ -1,6 +1,7 @@
 #include "text.hpp"
 #include <algorithm>
 #include <cstdio>
+#include <options.hpp>
 
 #if ROPE
 
@@ -144,11 +145,40 @@ void Text::insert(const char* str) {
     fileSize += len;
 }
 
-static bool isWordBreak(char from, char to) {
-    UNUSED(from);
-    UNUSED(to);
-    // TODO: implement
-    return true;
+static constexpr bool isWordBreak(char from, char to) {
+    const bool fromIsUpper = 'A' <= from && from <= 'Z';
+    const bool fromIsLower = 'a' <= from && from <= 'z';
+    const bool fromIsNumber = '0' <= from && from <= '9';
+    const bool fromIsNotSpecial = from == '_' and options.underscore_is_word_break;
+    const bool fromIsAlphaNum = fromIsUpper || fromIsLower || fromIsNumber || fromIsNotSpecial;
+    const bool toIsUpper = 'A' <= to && to <= 'Z';
+    const bool toIsLower = 'a' <= to && to <= 'z';
+    const bool toIsNumber = '0' <= to && to <= '9';
+    const bool toIsNotSpecial = to == '_' and options.underscore_is_word_break;
+    const bool toIsAlphaNum = toIsUpper || toIsLower || toIsNumber || toIsNotSpecial;
+    const bool fromIsWhiteSpace =
+    0x20 == from || // SPACE
+    0x9 == from || // TAB
+    0xa == from || // LINE FEED
+    0xb == from || // LINE TABULATION
+    0xc == from || // FORM FEED
+    0xd == from; // CARRIAGE RETURN
+    const bool toIsWhiteSpace =
+    0x20 == to || // SPACE
+    0x9 == to || // TAB
+    0xa == to || // LINE FEED
+    0xb == to || // LINE TABULATION
+    0xc == to || // FORM FEED
+    0xd == to; // CARRIAGE RETURN
+    const bool fromIsSpecial = !(fromIsAlphaNum || fromIsWhiteSpace);
+    const bool toIsSpecial = !(toIsAlphaNum || toIsWhiteSpace);
+    
+    
+    //                     FROM IS ALPHA NUM | FROM IS WHITE SPACE | FROM IS SPECIAL CHAR
+    // TO IS ALPHA NUM          false                   false               true
+    // TO IS WHITE SPACE        true                    false               true
+    // TO IS SPECIAL CHAR       true                    false               false
+    return !fromIsWhiteSpace && (fromIsSpecial != toIsSpecial || fromIsAlphaNum != toIsAlphaNum);
 }
 
 size_t Text::getFileSize() const {
@@ -337,7 +367,7 @@ ssize_t Text::home(std::vector<ssize_t>& newLines) {
     const size_t startOfThisLine = endOfThisLine == newLines.begin() ? 0 : *(endOfThisLine-1)+1;
     size_t endOfWhiteSpace;
     for (endOfWhiteSpace = startOfThisLine; endOfWhiteSpace < static_cast<size_t>(*endOfThisLine); endOfWhiteSpace++) {
-        if (!isWhiteSpace(buffer[endOfWhiteSpace])) {
+        if (not isWhiteSpace(buffer[endOfWhiteSpace])) {
             break;
         }
     }

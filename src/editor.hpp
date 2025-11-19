@@ -60,6 +60,7 @@ class Editor{
     void moveToMousePos();
     void buttonDown(const SDL_MouseButtonEvent& button);
     void scroll(SDL_MouseWheelEvent wheel) const;
+    // TODO: text selection
     void saveAs(const char* filename) {
         filenames.at(currentFile.index) = filename;
         files.items[currentFile.index].save(filename);
