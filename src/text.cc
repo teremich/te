@@ -224,7 +224,7 @@ void Text::backspace(bool wordWise) {
         }
         const auto gapSize = bufferSize-fileSize;
         needMoreForWholeWord = wordWise && !isWordBreak(buffer[cursor+gapSize-1], buffer[cursor-1]);
-        nonAscii = ((buffer[cursor+gapSize-1] & 0xC0) == 0x80) && (buffer[cursor-1] & 0x80); // checking buffer[cursor-1] is redundant but better be safe than sorry for deleting an ascii character that preceeded a 0b10… char
+        nonAscii = ((buffer[cursor] & 0xC0) == 0x80) && (buffer[cursor-1] & 0x80); // checking buffer[cursor-1] is redundant but better be safe than sorry for deleting an ascii character that preceeded a 0b10… char
     } while (nonAscii || needMoreForWholeWord);
 }
 
