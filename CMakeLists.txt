@@ -24,10 +24,10 @@ if(
     message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 endif()
 
-option(SDL_STATIC ON)
+set(SDL_STATIC ON)
 add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
 
-option(BUILD_SHARED_LIBS OFF)
+set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(vendor/SDL_ttf EXCLUDE_FROM_ALL)
 link_directories(
     vendor/SDL_ttf/build/
