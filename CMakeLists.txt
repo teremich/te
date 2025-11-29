@@ -30,7 +30,7 @@ add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
 option(BUILD_SHARED_LIBS OFF)
 add_subdirectory(vendor/SDL_ttf EXCLUDE_FROM_ALL)
 link_directories(
-    vendor/SDL_ttf/build/debug/
+    vendor/SDL_ttf/build/
 )
 include_directories(${SDL3_INCLUDE_FILES})
 
@@ -42,7 +42,6 @@ add_link_options(-fsanitize=address -flto -fvisibility=hidden)
 add_executable(Editor
     src/main.cc
     src/editor.cc
-    src/explorerSection.cc
     src/text.cc
 )
 target_include_directories(Editor PRIVATE
